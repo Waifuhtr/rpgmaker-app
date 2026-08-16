@@ -18,6 +18,10 @@ keystore.properties
 *.apk
 *.aab
 
+# release/ altındaki teslim dosyaları bilinçli olarak depoda tutulur
+!/release/*.apk
+!/release/*.zip
+
 # Sistem
 .DS_Store
 Thumbs.db
