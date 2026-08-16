@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        WebView içeriği yüklenene kadar görünen zemin. Piksel arayüzün arka planıyla aynı renk
+        seçilir, böylece açılışta beyaz flaş olmaz.
+    -->
+    <style name="Theme.PixelStore" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/pixel_backdrop</item>
+        <item name="android:statusBarColor">@color/pixel_ink</item>
+        <item name="android:navigationBarColor">@color/pixel_ink</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

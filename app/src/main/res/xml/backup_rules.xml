@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Katalog ve oturum tercihleri yedeklenir. WebView cache'i yedeklenmez; gereksiz yer kaplar.
+-->
+<full-backup-content>
+    <include domain="file" path="catalog.json" />
+    <include domain="sharedpref" path="pixelstore_session.xml" />
+    <exclude domain="file" path="app_webview" />
+</full-backup-content>

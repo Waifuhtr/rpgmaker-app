@@ -1,0 +1,23 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# İmzalama sırları asla depoya girmez
+keystore.properties
+*.jks
+*.keystore
+
+# Üretilen çıktılar
+/dist/
+*.apk
+*.aab
+
+# Sistem
+.DS_Store
+Thumbs.db

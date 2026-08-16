@@ -1,0 +1,11 @@
+# Derleme bağlamını küçük tut: build çıktıları ve yerel ayarlar imaja girmesin.
+project/build/
+project/app/build/
+project/.gradle/
+project/local.properties
+project/keystore.properties
+**/*.jks
+**/*.keystore
+**/.git/
+**/.DS_Store
+dist/
