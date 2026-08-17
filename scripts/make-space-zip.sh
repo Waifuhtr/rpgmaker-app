@@ -39,7 +39,7 @@ copy_item() {
 }
 
 for item in app gradle gradlew gradlew.bat settings.gradle.kts build.gradle.kts \
-            gradle.properties scripts docs README.md LICENSE .gitignore; do
+            gradle.properties scripts docs wordpress-plugin README.md LICENSE .gitignore; do
   copy_item "$item"
 done
 
@@ -48,10 +48,19 @@ rm -f  "$PKG/project/local.properties" "$PKG/project/keystore.properties"
 find "$PKG/project" -name '*.jks' -delete
 find "$PKG/project" -name '*.keystore' -delete
 
-if [ ! -f "$PKG/project/app/src/main/assets/www/index.html" ]; then
-  echo "HATA: assets/www/index.html pakette yok, Space boş ekran açar." >&2
-  exit 1
-fi
+# Pakette olmazsa uygulama derlenmez veya boş açılır: build'i sessizce kırmak yerine erken dur.
+required=(
+  "project/app/src/main/java/com/waifuhtr/pixelstore/MainActivity.kt"
+  "project/app/src/main/assets/catalog_seed.json"
+  "project/app/src/main/res/font/press_start_2p.ttf"
+  "project/wordpress-plugin/pixelstore-api/pixelstore-api.php"
+)
+for item in "${required[@]}"; do
+  if [ ! -f "$PKG/$item" ]; then
+    echo "HATA: $item pakette yok." >&2
+    exit 1
+  fi
+done
 
 chmod +x "$PKG/project/gradlew"
 
@@ -60,7 +69,13 @@ ZIP="$OUT_DIR/pixelstore-hf-space.zip"
 rm -f "$ZIP"
 (cd "$STAGE" && zip -q -r "$ZIP" "pixelstore-space")
 
+# WordPress eklentisi ayrıca tek başına zip'lenir: doğrudan wp-admin'e yüklenebilir.
+PLUGIN_ZIP="$OUT_DIR/pixelstore-wordpress-plugin.zip"
+rm -f "$PLUGIN_ZIP"
+(cd "$ROOT/wordpress-plugin" && zip -q -r "$PLUGIN_ZIP" "pixelstore-api")
+
 echo "==> Hazır: $ZIP ($(du -h "$ZIP" | cut -f1))"
+echo "==> Hazır: $PLUGIN_ZIP ($(du -h "$PLUGIN_ZIP" | cut -f1))"
 echo
 echo "Yükleme:"
 echo "  1) huggingface.co/new-space -> SDK: Docker -> Blank"

@@ -53,6 +53,11 @@ COPY project/ ./
 RUN mkdir -p /out \
  && zip -q -r /out/pixelstore-source.zip . -x '.git/*' -x '.gradle/*' -x 'local.properties'
 
+# WordPress eklentisi: doğrudan wp-admin'e yüklenebilecek zip.
+RUN if [ -d wordpress-plugin/pixelstore-api ]; then \
+      (cd wordpress-plugin && zip -q -r /out/pixelstore-wordpress-plugin.zip pixelstore-api); \
+    fi
+
 RUN chmod +x ./gradlew \
  && (./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /out/build-log.txt \
      || touch /out/BUILD_FAILED) \
@@ -69,7 +74,8 @@ RUN useradd -m -u 1000 pixel
 WORKDIR /app
 
 COPY --from=build /out/ /app/artifacts/
-COPY --from=build /workspace/app/src/main/assets/www/ /app/demo/
+# Açılış sayfası piksel yazı tipini kullanıyor.
+COPY --from=build /workspace/app/src/main/res/font/press_start_2p.ttf /app/assets/press_start_2p.ttf
 COPY server.py /app/server.py
 
 RUN chown -R pixel:pixel /app

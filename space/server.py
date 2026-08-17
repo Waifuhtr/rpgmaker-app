@@ -4,7 +4,7 @@ PixelStore Space sunucusu.
 
 Yalnızca Python standart kütüphanesini kullanır. Görevi:
   - Derleme çıktılarını (APK, kaynak zip, build günlüğü) indirilebilir yapmak
-  - Arayüzün tarayıcı sürümünü /demo/ altında sunmak
+  - WordPress eklentisini indirilebilir zip olarak sunmak
   - Durumu piksel temalı bir açılış sayfasında göstermek
 
 Hugging Face Spaces uygulamayı $PORT (varsayılan 7860) üzerinden bekler.
@@ -17,11 +17,12 @@ import string
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 ARTIFACTS = os.path.join(ROOT, "artifacts")
-DEMO = os.path.join(ROOT, "demo")
+ASSETS = os.path.join(ROOT, "assets")
 PORT = int(os.environ.get("PORT", "7860"))
 
 APK_NAME = "PixelStore-debug.apk"
 SOURCE_NAME = "pixelstore-source.zip"
+PLUGIN_NAME = "pixelstore-wordpress-plugin.zip"
 LOG_NAME = "build-log.txt"
 
 
@@ -51,7 +52,7 @@ PAGE = string.Template("""<!DOCTYPE html>
 <style>
 @font-face {
   font-family: 'Press Start 2P';
-  src: url('/demo/fonts/PressStart2P-Regular.ttf') format('truetype');
+  src: url('/assets/press_start_2p.ttf') format('truetype');
   font-display: swap;
 }
 :root {
@@ -127,7 +128,7 @@ li { margin-bottom:8px; color:#cfcfe6; }
       <rect x="8" y="14" width="2" height="1" fill="#1b1b2f"/>
     </svg>
     <h1>PIXELSTORE</h1>
-    <p class="muted" style="text-align:center">RPG Maker tarzı piksel uygulama mağazası · Kotlin + WebView</p>
+    <p class="muted" style="text-align:center">RPG Maker tarzı piksel uygulama mağazası · Kotlin + Jetpack Compose</p>
   </div>
 
   <div class="status status--$status_class">$status_text</div>
@@ -141,8 +142,8 @@ li { margin-bottom:8px; color:#cfcfe6; }
       <a class="btn" href="/$source_name" $source_disabled download>
         <span>KAYNAK KODU (ZIP)</span><small>$source_size</small>
       </a>
-      <a class="btn btn--mint" href="/demo/index.html">
-        <span>CANLI DEMO (TARAYICI)</span><small>web</small>
+      <a class="btn btn--mint" href="/$plugin_name" $plugin_disabled download>
+        <span>WORDPRESS EKLENTİSİ (ZIP)</span><small>$plugin_size</small>
       </a>
       <a class="btn" href="/$log_name" $log_disabled>
         <span>BUILD GÜNLÜĞÜ</span><small>$log_size</small>
@@ -156,10 +157,12 @@ li { margin-bottom:8px; color:#cfcfe6; }
       <tr><th>ROL</th><th>KULLANICI</th><th>PAROLA</th><th>GÖRÜR</th></tr>
       <tr><td><span class="tag">YÖNETİCİ</span></td><td><code>admin</code></td><td><code>admin123</code></td><td>Mağaza + Yönetim</td></tr>
       <tr><td><span class="tag">KULLANICI</span></td><td><code>user</code></td><td><code>user123</code></td><td>Yalnızca mağaza</td></tr>
+      <tr><td colspan="4" class="muted">WordPress kipinde bunlar yerine sitenin kendi kullanıcıları geçerli olur; yönetici yetkisi WordPress rolünden gelir.</td></tr>
     </table>
     <p class="muted" style="margin-top:12px">
-      Yönetim sekmesi kullanıcı rolünde DOM'a hiç eklenmez. APK'da yetki kararını Kotlin verir:
-      kullanıcı rolünde yönetim köprü uçları veri değil hata döndürür.
+      Yönetim sekmesi kullanıcı rolünde arayüzde hiç oluşturulmaz. Yetki kararını veri kaynağı
+      verir: yerel kipte Kotlin, WordPress kipinde sunucudaki yetenek denetimi. Kullanıcı rolünde
+      taslak kayıtlar ve yönetim uçları veri döndürmez.
     </p>
   </div>
 
@@ -168,12 +171,13 @@ li { margin-bottom:8px; color:#cfcfe6; }
     <ul>
       <li>APK'yı indir, telefonda "bilinmeyen kaynaklara izin ver" ile kur.</li>
       <li>Debug imzalıdır; Play Store dağıtımı için release imzası gerekir.</li>
-      <li>Katalog cihazda saklanır, dışarı veri gönderilmez.</li>
-      <li>Tarayıcı demosu aynı arayüzü çalıştırır; veriler <code>localStorage</code>'dadır.</li>
+      <li>Kurulumdan sonra <strong>yerel kip</strong> çalışır: katalog cihazda, demo hesaplar geçerli, internet gerekmez.</li>
+      <li>WordPress'i veritabanı yapmak için eklenti zip'ini kur, sonra uygulamada
+          <em>Profil → Bağlantı ayarları</em>'na site adresini gir.</li>
     </ul>
   </div>
 
-  <p class="muted" style="text-align:center">min SDK 24 · target SDK 35 · Kotlin + WebViewAssetLoader</p>
+  <p class="muted" style="text-align:center">min SDK 24 · target SDK 35 · Jetpack Compose · WebView yok</p>
 </div>
 </body>
 </html>
@@ -198,13 +202,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         # Çıktı dosyaları kök altından sunulur; diğer her şey dosya sisteminden.
         stripped = self.path.lstrip("/").split("?", 1)[0]
-        if stripped in (APK_NAME, SOURCE_NAME, LOG_NAME):
+        if stripped in (APK_NAME, SOURCE_NAME, PLUGIN_NAME, LOG_NAME):
             self.path = "/artifacts/" + stripped
         super().do_GET()
 
     def send_landing(self):
         apk = artifact_path(APK_NAME)
         source = artifact_path(SOURCE_NAME)
+        plugin = artifact_path(PLUGIN_NAME)
         log = artifact_path(LOG_NAME)
         failed = os.path.exists(artifact_path("BUILD_FAILED")) or not os.path.exists(apk)
 
@@ -217,11 +222,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             apk_name=APK_NAME,
             source_name=SOURCE_NAME,
             log_name=LOG_NAME,
+            plugin_name=PLUGIN_NAME,
             apk_size=human_size(apk) or "yok",
             source_size=human_size(source) or "yok",
+            plugin_size=human_size(plugin) or "yok",
             log_size=human_size(log) or "yok",
             apk_disabled="" if os.path.exists(apk) else 'aria-disabled="true"',
             source_disabled="" if os.path.exists(source) else 'aria-disabled="true"',
+            plugin_disabled="" if os.path.exists(plugin) else 'aria-disabled="true"',
             log_disabled="" if os.path.exists(log) else 'aria-disabled="true"',
         ).encode("utf-8")
 
@@ -248,7 +256,7 @@ def main():
     os.chdir(ROOT)
     print("PixelStore Space -> http://0.0.0.0:%d" % PORT)
     print("  artifacts:", sorted(os.listdir(ARTIFACTS)))
-    print("  demo:", "var" if os.path.isdir(DEMO) else "yok")
+    print("  assets:", "var" if os.path.isdir(ASSETS) else "yok")
     with Server(("0.0.0.0", PORT), Handler) as httpd:
         httpd.serve_forever()
 

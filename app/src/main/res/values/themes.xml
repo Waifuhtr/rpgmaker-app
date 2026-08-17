@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-        WebView içeriği yüklenene kadar görünen zemin. Piksel arayüzün arka planıyla aynı renk
-        seçilir, böylece açılışta beyaz flaş olmaz.
+        Compose kendi temasını çizer; buradaki tema yalnızca pencere zeminini ve açılışta
+        görünen rengi belirler. Piksel arayüzün zemini seçilir, böylece açılışta beyaz flaş olmaz.
     -->
     <style name="Theme.PixelStore" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/pixel_backdrop</item>

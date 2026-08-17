@@ -1,23 +1,37 @@
 # PixelStore
 
-RPG Maker estetiğinde, piksel sanatıyla çizilmiş bir **uygulama mağazası** — Kotlin kabuk + WebView
-arayüz. Play Store'un işlevlerini (başlık, ikon, açıklama, ekran görüntüleri, türler, puan, indirme)
-8-bit bir vitrinde toplar ve rol tabanlı bir **yönetim paneli** içerir.
+RPG Maker estetiğinde, piksel sanatıyla çizilmiş bir **uygulama mağazası**. Play Store'un
+işlevlerini (başlık, ikon, açıklama, ekran görüntüleri, türler, puan, indirme) 8-bit bir vitrinde
+toplar ve rol tabanlı bir **yönetim paneli** içerir.
 
-<!-- Ekran görüntüleri uygulamanın kendisi tarafından üretilir; depoda ikili görsel taşınmaz. -->
+**Tamamen yerel Android uygulaması** — WebView yok, HTML/CSS/JS yok. Arayüzün her pikseli
+Jetpack Compose ile çizilir. Veritabanı olarak cihazı veya **WordPress**'i kullanabilir.
 
 ## Ne yapar
 
 | Ekran | İçerik |
 |---|---|
-| Giriş | İki demo hesap düğmesi + manuel form |
-| Mağaza | Haftanın oyunu, arama, tür filtreleri, 4 sıralama kipi, uygulama kartları |
-| Tür listesi | Piksel simgeli tür kutuları, kayıt sayıları |
-| Kayıt detayı | İkon, puan/indirme/boyut, indirme akışı, ekran görüntüsü galerisi, açıklama, etiketler, bilgi tablosu |
-| Profil | Kütüphane, ses/titreşim/tarama-çizgisi ayarları, sürüm bilgisi, çıkış |
-| **Yönetim** | İstatistik kartları, tür dağılımı, katalog CRUD, yayın durumu, kullanıcı listesi, katalog sıfırlama |
+| Giriş | Demo hesap kartları, manuel form, sunucu/bağlantı paneli |
+| Mağaza | Haftanın oyunu afişi, arama, tür çipleri, 4 sıralama kipi, uygulama kartları |
+| Türler | Piksel simgeli tür kutuları, kayıt sayısı ve dağılım çubuğu |
+| Kayıt detayı | İkon, puan/indirme/boyut şeridi, indirme akışı, ekran görüntüsü galerisi + tam ekran görüntüleyici, açıklama, etiketler, bilgi tablosu |
+| Profil | Kütüphane, ses/titreşim ayarları, bağlantı bilgisi, çıkış |
+| **Yönetim** | İstatistik kartları, tür dağılımı, katalog CRUD, canlı önizlemeli kayıt düzenleyici, ekran görüntüsü editörü, kullanıcı listesi, katalog sıfırlama |
+| Bağlantı | WordPress adresi, bağlantı sınaması, kurulum adımları |
 
-## Demo hesaplar
+## İki veri kaynağı
+
+Uygulama tek başına da çalışır, WordPress'e de bağlanır. Aktif kip üst çubukta rozet olarak yazar.
+
+| | **Yerel kip** (varsayılan) | **WordPress kipi** |
+|---|---|---|
+| Katalog | cihazın özel dizininde `catalog.json` | `pixelstore_app` özel yazı tipi |
+| Hesaplar | gömülü `admin` / `user` | sitenin WordPress kullanıcıları |
+| Yönetici kararı | Kotlin hesap tablosu | WordPress yetenekleri (`manage_options` / `edit_others_posts`) |
+| İnternet | gerekmez | gerekir |
+| Geçiş | Profil → Bağlantı ayarları'nda adresi boş bırak | adresi gir, kaydet |
+
+## Demo hesaplar (yerel kip)
 
 | Rol | Kullanıcı | Parola | Gördüğü |
 |---|---|---|---|
@@ -26,55 +40,63 @@ arayüz. Play Store'un işlevlerini (başlık, ikon, açıklama, ekran görünt�
 
 ## Yetki ayrımı nasıl çalışır
 
-Rol kararı **native tarafta** verilir, arayüzde değil:
+Rol kararı **veri kaynağında** verilir, arayüzde değil:
 
-- `AccountManager` oturumu Kotlin tarafında tutar. JS'ten gelen "ben adminim" iddiası okunmaz.
-- `StoreBridge`'deki `admin*` uçları `requireAdmin()` ile korunur; kullanıcı rolünde veri değil
-  `{"ok":false,"error":"…"}` döner.
-- Kullanıcı rolünde katalog yükü `publicApps()` ile üretilir: yayınlanmamış kayıtlar ve
-  `published` / `createdAt` gibi yönetim alanları yüke **hiç konmaz**.
-- Yönetim sekmesi kullanıcı rolünde DOM'a eklenmez — CSS ile gizlenmiş bir düğüm bırakılmaz.
-
-Yani DevTools ile arayüz kurcalansa bile yönetim verisi elde edilemez. Bu davranış otomatik
-tarayıcı testiyle doğrulanmıştır (kullanıcı rolünde 7 kayıt / yönetici rolünde 8 kayıt, taslak
-rozeti 0, üç admin ucunun üçü de reddedildi).
+- **Veri katmanı** — kullanıcı rolünde katalog yükü taslak kayıtları ve `published`/`createdAt`
+  alanlarını hiç içermez.
+- **Kaynak katmanı** — `saveApp`, `deleteApp`, `setPublished`, `users`, `stats`, `resetCatalog`
+  çağrıları yönetici değilse veri değil hata döner. Yerel kipte bunu `LocalCatalogSource`,
+  WordPress kipinde sunucudaki yetenek denetimi yapar.
+- **Arayüz katmanı** — Yönetim sekmesi kullanıcı rolünde hiç oluşturulmaz; `push()`/`openTab()`
+  de `adminOnly` ekranları reddeder.
 
 ## Mimari
 
 ```
 app/src/main/
 ├── java/com/waifuhtr/pixelstore/
-│   ├── MainActivity.kt        WebView kabuğu, gezinme kilidi, yaşam döngüsü, geri tuşu
-│   ├── StoreBridge.kt         @JavascriptInterface köprüsü (dar yüzey, rol korumalı)
-│   ├── Accounts.kt            Hesap tablosu, oturum, SHA-256 parola özetleri
-│   └── CatalogRepository.kt   Atomik JSON deposu, şema doğrulama, istatistik
-└── assets/www/                Arayüzün tamamı (HTML/CSS/JS, framework yok)
-    ├── index.html             CSP + kabuk iskeleti
-    ├── css/pixel.css          Piksel tema (box-shadow çerçeveler, tarama çizgileri)
-    ├── fonts/                 Press Start 2P (OFL-1.1)
-    ├── data/catalog.json      Tohum katalog
-    └── js/
-        ├── bridge.js          Native köprü + tarayıcı yedeği (Space demosu için)
-        ├── pixelart.js        Tohumdan üretilen ikon/ekran görüntüsü/simge çizimi
-        ├── ui.js              DOM, ses (WebAudio), bildirim, modal, segment çubuk
-        ├── views.js           Kullanıcı ekranları
-        ├── admin.js           Yönetim ekranları
-        └── app.js             Router, oturum akışı, native geri çağrıları
+│   ├── MainActivity.kt              Compose host, geri tuşu, ses/titreşim sağlayıcı
+│   ├── StoreViewModel.kt            UI durumu, gezinme yığını, tüm eylemler
+│   ├── data/
+│   │   ├── Models.kt                Veri modelleri + JSON dönüşümleri (tek ayrıştırıcı)
+│   │   ├── CatalogSource.kt         Kaynak arayüzü
+│   │   ├── LocalCatalogSource.kt    Cihaz içi katalog, atomik yazma, hesap tablosu
+│   │   ├── WordPressCatalogSource.kt REST istemcisi
+│   │   ├── HttpJson.kt              HttpURLConnection tabanlı küçük JSON istemcisi
+│   │   └── Settings.kt              Tercihler, jeton, kurulu kayıtlar
+│   └── ui/
+│       ├── theme/Theme.kt           Renkler, iki yazı tipli tipografi, piksel çerçeve modifier'ları
+│       ├── art/PixelArt.kt          Tohumdan üretilen ikon/sahne/glif çizimi + LRU önbellek
+│       ├── components/Components.kt Düğme, alan, rozet, segment çubuk, panel, anahtar…
+│       ├── Feedback.kt              8-bit sesler (AudioTrack ile üretilir) + titreşim
+│       └── screens/                 Her ekran tek dosya
+├── res/font/press_start_2p.ttf      Piksel yazı tipi (OFL-1.1)
+└── assets/catalog_seed.json         Tohum katalog
+
+wordpress-plugin/pixelstore-api/     WordPress eklentisi (veritabanı + REST)
+space/                               Hugging Face Space (APK derler, çıktıları sunar)
 ```
-
-### Neden WebView
-
-Arayüz tamamen HTML/CSS/JS olduğu için aynı kod hem APK içinde hem tarayıcıda çalışır; Hugging Face
-Space'teki canlı demo bunu kullanır. Assetler `WebViewAssetLoader` ile sabit bir `https://` origin'i
-üzerinden sunulur — `file://` erişimi hiç açılmaz ve LocalStorage'daki tercihler sürüm
-güncellemeleri arasında korunur.
 
 ### Görseller nereden geliyor
 
-Depoda **tek bir oyun görseli yok**. Her ikon ve ekran görüntüsü, kaydın `iconSeed`/`seed`
-değerinden deterministik olarak canvas üzerine çizilir (`pixelart.js`). Katalog büyüdükçe APK
-boyutu artmaz, yönetici yeni kayıt eklerken hazır görsel aramak zorunda kalmaz. Altı sahne tipi
-vardır: açılış, ova, savaş, kasaba, mağara, menü.
+Depoda **tek bir oyun görseli yok**. Her ikon ve ekran görüntüsü `iconSeed`/`seed` değerinden
+deterministik olarak bir `Bitmap`'e piksel piksel yazılır, sonra `FilterQuality.None` ile
+büyütülerek çizilir. Üretilenler LRU önbellekte tutulur, liste kaydırmada yeniden hesaplanmaz.
+Altı sahne tipi vardır: açılış, ova, savaş, kasaba, mağara, menü.
+
+Sesler de dosya değil: kare/üçgen dalga PCM tamponları çalışma zamanında üretilip `AudioTrack`
+ile çalınır.
+
+### Okunabilirlik kararları
+
+v1'in arayüzü "boğuk" bulunmuştu. v2'de:
+
+- **İki yazı tipi**: Press Start 2P yalnızca kısa metinlerde (başlık, etiket, düğme, sayı);
+  paragraflar sistem yazı tipinde, geniş satır aralığıyla. Piksel yazı tipinde uzun metin okunmuyor.
+- **Üç yüzey kademesi** (zemin / yüzey / yükseltilmiş yüzey) ve yükseltilmiş metin kontrastı.
+- **Tarama çizgisi katmanı kaldırıldı** — murk'un ana kaynağıydı.
+- Bölüm başlıkları glif + başlık + çizgi; kartlarda dört bilgi kademesi (başlık, geliştirici,
+  açıklama, ölçüler) ayrı boyut ve renkte.
 
 ## Derleme
 
@@ -86,57 +108,72 @@ export ANDROID_HOME=/path/to/android-sdk   # platforms;android-35, build-tools;3
 # çıktı: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Sürüm matrisi: Gradle 8.14.3 · AGP 8.11.1 · Kotlin 2.1.21 · JDK 17 hedefi · compileSdk 35 · minSdk 24.
+Sürüm matrisi: Gradle 8.14.3 · AGP 8.11.1 · Kotlin 2.1.21 · Compose BOM 2025.06.00 · JDK 17 hedefi
+· compileSdk 35 · minSdk 24.
 
-`preBuild` öncesinde `verifyWebAssets` görevi çalışır: `index.html` yoksa veya `www` içinde
-büyük/küçük harf çakışması varsa build açık hatayla durur (Android dosya adlarında harf
-duyarlıdır).
+Derlenmiş APK her sürümde `release/PixelStore-debug.apk` altında depoya konur.
+
+### Tasarımı görmek (emülatörsüz)
+
+Ekranlar Robolectric'in yerel grafik kipinde JVM üzerinde çizilip PNG'ye alınabilir:
+
+```bash
+./gradlew :app:testDebugUnitTest --tests '*DesignScreenshotTest'
+# çıktı: app/build/screenshots/*.png
+```
 
 ### Hugging Face Space üzerinde
 
 ```bash
-scripts/make-space-zip.sh          # dist/pixelstore-hf-space.zip üretir
+scripts/make-space-zip.sh
+# dist/pixelstore-hf-space.zip          -> Space deposuna
+# dist/pixelstore-wordpress-plugin.zip  -> wp-admin'e
 ```
 
-Zip'in içindeki `pixelstore-space/` klasörünün **içeriğini** Space deposunun köküne koyup push edin.
-Space (Docker SDK, port 7860):
+Zip'in içindeki `pixelstore-space/` klasörünün **içeriğini** Space deposunun köküne koyup push
+edin. Space (Docker SDK, port 7860) imaj derlenirken Android SDK indirir, `assembleDebug`
+çalıştırır ve açılış sayfasında APK, kaynak zip'i, WordPress eklentisi zip'i ile build günlüğünü
+sunar. Derleme başarısız olsa bile Space ayağa kalkar.
 
-1. İmaj derlenirken Android SDK iner ve `./gradlew assembleDebug` çalışır.
-2. Açılış sayfası APK'yı, kaynak zip'ini ve build günlüğünü indirilebilir yapar.
-3. `/demo/` altında arayüzün tarayıcı sürümü çalışır.
+## WordPress'i veritabanı yapmak
 
-Derleme başarısız olsa bile Space ayağa kalkar ve günlüğü gösterir.
+1. `wordpress-plugin/pixelstore-api` klasörünü zip'leyip WordPress'e kur ve etkinleştir
+   (ya da `dist/pixelstore-wordpress-plugin.zip` dosyasını kullan).
+2. wp-admin → **PixelStore** → "Demo kataloğu kur".
+3. Aynı ekranda yazan site adresini uygulamada **Profil → Bağlantı ayarları**'na gir,
+   "Bağlantıyı sına" ile doğrula, kaydet.
+4. WordPress kullanıcı adın ve parolanla giriş yap.
 
-### Release imzalama
+Eklenti ayrıntıları: [`wordpress-plugin/pixelstore-api/readme.txt`](wordpress-plugin/pixelstore-api/readme.txt)
 
-`keystore.properties` **depoda yoktur ve olmamalıdır**. Varsa otomatik okunur:
-
-```properties
-storeFile=release.jks
-storePassword=…
-keyAlias=…
-keyPassword=…
-```
-
-Dosya yoksa `assembleRelease` imzasız çıktı üretir. R8 açıktır; `@JavascriptInterface` metotları
-`proguard-rules.pro` ile korunur.
+Uçlar `/wp-json/pixelstore/v1/` altındadır: `health`, `auth/login`, `auth/me`, `auth/logout`,
+`catalog`, `apps/{id}`, `apps/{id}/install`, `apps/{id}/published`, `users`, `stats`, `seed`.
 
 ## Güvenlik notları
 
-- **Gezinme kilidi:** `shouldOverrideUrlLoading` yalnızca uygulama origin'ine izin verir. Dış
-  bağlantı yalnızca kullanıcı dokunuşuyla, şema/host doğrulamasından geçtikten sonra sistem
-  tarayıcısına gider (`user:pass@host` biçimli adresler reddedilir).
-- **Köprü yüzeyi dar:** genel amaçlı `eval`, `readFile`, `openUrl(any)` yok. Her çağrı origin
-  kontrolünden geçer; WebView yerel origin dışına çıkarsa köprü kapanır.
-- **CSP:** `script-src 'self'; style-src 'self'` — inline script ve inline stil yasaktır.
-  (İlerleme çubukları bu yüzden inline `width` yerine segment bloklarıyla çizilir.)
-- **Parolalar:** kaynak kodda düz metin değil, sabit tuzlu SHA-256 özeti olarak durur;
-  karşılaştırma sabit zamanlıdır. Özetler arayüze hiç gönderilmez.
-- **Depolama:** `allowFileAccess = false`, `allowContentAccess = false`. Katalog yazımı atomiktir
-  (`.tmp` + rename), gelen JSON şemaya göre budanır ve sınırlanır.
-- **Debug ayrımı:** WebView remote debugging yalnızca debug build'de açıktır.
+- **Parolalar**: yerel kipte kaynak kodda düz metin değil, sabit tuzlu SHA-256 özeti; karşılaştırma
+  sabit zamanlı. WordPress kipinde parola doğrulaması `wp_authenticate()` ile sitenin kendi
+  kullanıcı tablosuna karşı yapılır, eklenti parola saklamaz.
+- **Jetonlar**: WordPress kipinde rastgele jeton üretilir; sunucuda yalnızca SHA-256 özeti kullanıcı
+  metasında durur, 30 gün sonra düşer, kullanıcı başına en fazla 5 cihaz. Çıkış yalnızca o cihazın
+  jetonunu iptal eder.
+- **Rol yükseltme**: oturum sürdürülürken rol kalıcı tercihlerden değil hesap tablosundan /
+  sunucudan okunur; tercihler kurcalansa bile yetki yükseltilemez.
+- **Sunucu tarafı doğrulama**: uygulamadan gelen JSON şemaya göre budanır (metin uzunlukları,
+  sayı aralıkları, yalnızca `http(s)` bağlantılar, en fazla 8 ekran görüntüsü). İndirme sayacı
+  istemciden yazılamaz, yalnızca `/install` ucu artırır.
+- **Yerel yazma**: katalog yazımı atomiktir (`.tmp` + rename); yarım dosya kataloğu bozamaz.
+- **İmzalama**: `keystore.properties` depoda yoktur. Varsa release otomatik imzalanır, yoksa
+  imzasız çıkar. R8 açıktır.
+
+## Test
+
+```bash
+./gradlew :app:testDebugUnitTest      # Compose ekran render testi (PNG üretir)
+php wordpress-plugin/tests/auth-smoke.php   # jeton üretimi/doğrulama/iptali (WordPress gerekmez)
+```
 
 ## Lisans
 
 Kod MIT. Press Start 2P yazı tipi SIL Open Font License 1.1 ile gelir
-(`app/src/main/assets/www/fonts/OFL.txt`).
+(`app/src/main/assets/OFL-PressStart2P.txt`).

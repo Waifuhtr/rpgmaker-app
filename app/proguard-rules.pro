@@ -1,15 +1,12 @@
-# WebView'e @JavascriptInterface ile açılan köprü metotları release'de isim değiştirmemeli,
-# aksi halde JS tarafındaki çağrılar sessizce kaybolur.
--keepclassmembers class com.waifuhtr.pixelstore.StoreBridge {
-    @android.webkit.JavascriptInterface <methods>;
-}
--keepclassmembers class * {
-    @android.webkit.JavascriptInterface <methods>;
-}
+# Compose ve Kotlin için AGP'nin varsayılan kuralları yeterli; buraya yalnızca projeye özgü
+# gereksinimler yazılır.
 
-# WebView içinden çağrılan geri dönüş noktaları
--keepclassmembers class * extends android.webkit.WebViewClient {
-    public void *(android.webkit.WebView, java.lang.String);
-}
+# Katalog JSON'u org.json ile elle ayrıştırılıyor (yansıma yok), bu yüzden model sınıfları için
+# keep kuralı gerekmiyor. Yine de veri sınıflarının adları kilitlenmez; yalnızca uyarılar susturulur.
+-dontwarn org.json.**
 
--dontwarn android.webkit.**
+# Robolectric ekran testleri release paketine girmez.
+-dontwarn org.robolectric.**
+
+# Kotlin coroutines / metadata: AGP kuralları kapsıyor, ek uyarıları sustur.
+-dontwarn kotlinx.coroutines.**
