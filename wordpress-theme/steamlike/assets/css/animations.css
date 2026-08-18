@@ -1,0 +1,47 @@
+/*
+ * SteamLike / Riaslink — Hareket Kütüphanesi
+ * Bilinçli ve ölçülü kullanılan, tekrar eden anahtar kareler (keyframes).
+ * Not: main.css içindeki prefers-reduced-motion kuralı bunları da kapsar.
+ */
+
+@keyframes slFadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slScaleIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes slPulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.35); }
+    50% { box-shadow: 0 0 0 8px rgba(34, 211, 238, 0); }
+}
+
+@keyframes slFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+/* İskelet (skeleton) yükleme efekti — ileride AJAX yükleme durumları için hazır sınıf */
+.sl-skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.09) 37%, rgba(255,255,255,0.04) 63%);
+    background-size: 400% 100%;
+    animation: slShimmer 1.6s ease infinite;
+    border-radius: var(--sl-radius-sm, 8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sl-skeleton { animation: none; }
+}

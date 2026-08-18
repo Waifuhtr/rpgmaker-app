@@ -113,10 +113,10 @@ fun PixelButton(
     enabled: Boolean = true,
     glyph: String? = null
 ) {
-    val fill: Color
-    val label: Color
-    val highlight: Color
-    val shadow: Color
+    var fill: Color
+    var label: Color
+    var highlight: Color
+    var shadow: Color
     when (tone) {
         PixelButtonTone.PRIMARY -> {
             fill = PixelColors.Gold; label = PixelColors.OnGold
@@ -139,29 +139,32 @@ fun PixelButton(
             highlight = Color(0xFF6B41AE); shadow = Color(0xFF2C1A4C)
         }
     }
-    val alpha = if (enabled) 1f else 0.45f
+    // Pasif düğme rengini soldurmak yerine nötr griye çevirir. Soluk altın, zeytin yeşili gibi
+    // görünüp "arızalı" hissi veriyordu; gri açıkça "şu an basılamaz" diyor.
+    if (!enabled) {
+        fill = PixelColors.SurfaceSunken
+        label = PixelColors.TextTertiary
+        highlight = PixelColors.OutlineSoft
+        shadow = PixelColors.Ink
+    }
 
     Row(
         modifier = modifier
             .defaultMinSize(minHeight = 48.dp)
-            .pixelRaised(
-                fill = fill.copy(alpha = alpha),
-                highlight = highlight.copy(alpha = alpha),
-                shadow = shadow.copy(alpha = alpha)
-            )
+            .pixelRaised(fill = fill, highlight = highlight, shadow = shadow)
             .then(if (enabled) Modifier.clickablePixel(onClick) else Modifier)
             .padding(horizontal = PixelSpacing.large, vertical = PixelSpacing.medium),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (glyph != null) {
-            PixelGlyphImage(glyph, label.copy(alpha = alpha), Modifier.size(12.dp))
+            PixelGlyphImage(glyph, label, Modifier.size(12.dp))
             Spacer(Modifier.width(PixelSpacing.small))
         }
         Text(
             text = text,
             style = MaterialTheme.typography.labelLarge,
-            color = label.copy(alpha = alpha),
+            color = label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

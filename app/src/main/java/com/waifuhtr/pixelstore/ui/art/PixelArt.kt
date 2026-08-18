@@ -425,7 +425,16 @@ object PixelArt {
         "dotOff" to arrayOf(".###.", "#...#", "#...#", "#...#", ".###."),
         "left" to arrayOf("...#.", "..##.", ".###.", "..##.", "...#."),
         "right" to arrayOf(".#...", ".##..", ".###.", ".##..", ".#..."),
-        "check" to arrayOf("....#", "...##", "#.##.", "###..", ".#...")
+        "check" to arrayOf("....#", "...##", "#.##.", "###..", ".#..."),
+        // İstek listesi
+        "heart" to arrayOf(".#.#.", "#####", "#####", ".###.", "..#.."),
+        // İndirme: aşağı ok + taban çizgisi
+        "download" to arrayOf("..#..", "#####", ".###.", "..#..", "#####"),
+        // İnceleme oyları
+        "up" to arrayOf("..#..", ".###.", "#####", ".....", "....."),
+        "down" to arrayOf(".....", ".....", "#####", ".###.", "..#.."),
+        // Uyarı / hata bildirimi
+        "warn" to arrayOf("..#..", "..#..", "..#..", ".....", "..#..")
     )
 
     /**

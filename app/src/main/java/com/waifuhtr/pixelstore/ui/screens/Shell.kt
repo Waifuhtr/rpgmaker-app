@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,34 +28,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.waifuhtr.pixelstore.MessageTone
 import com.waifuhtr.pixelstore.Screen
 import com.waifuhtr.pixelstore.StoreViewModel
-import com.waifuhtr.pixelstore.MessageTone
 import com.waifuhtr.pixelstore.UiState
-import com.waifuhtr.pixelstore.data.SourceKind
 import com.waifuhtr.pixelstore.ui.LocalFeedback
 import com.waifuhtr.pixelstore.ui.Sfx
-import com.waifuhtr.pixelstore.ui.art.PixelArt
-import com.waifuhtr.pixelstore.ui.art.PixelGlyphImage
 import com.waifuhtr.pixelstore.ui.art.PixelCrestImage
-import com.waifuhtr.pixelstore.ui.art.PixelIconImage
-import com.waifuhtr.pixelstore.ui.components.BadgeTone
-import com.waifuhtr.pixelstore.ui.components.PixelBadge
+import com.waifuhtr.pixelstore.ui.art.PixelGlyphImage
 import com.waifuhtr.pixelstore.ui.components.PixelButton
 import com.waifuhtr.pixelstore.ui.components.PixelButtonTone
+import com.waifuhtr.pixelstore.ui.components.PixelTextField
+import com.waifuhtr.pixelstore.ui.components.RemoteImage
 import com.waifuhtr.pixelstore.ui.components.SegmentBar
 import com.waifuhtr.pixelstore.ui.components.clickablePixel
 import com.waifuhtr.pixelstore.ui.theme.PixelColors
 import com.waifuhtr.pixelstore.ui.theme.PixelSpacing
 import com.waifuhtr.pixelstore.ui.theme.pixelFrame
 
-/** Sekme tanımı. Yönetim sekmesi yalnızca yönetici oturumunda listeye girer. */
 private data class Tab(
     val screen: Screen,
     val label: String,
@@ -65,6 +64,7 @@ private data class Tab(
 private val tabs = listOf(
     Tab(Screen.Store, "Mağaza", "bag"),
     Tab(Screen.Categories, "Türler", "grid"),
+    Tab(Screen.Wishlist, "Listem", "heart"),
     Tab(Screen.Profile, "Profil", "hero"),
     Tab(Screen.Admin, "Yönetim", "gear", adminOnly = true)
 )
@@ -93,9 +93,10 @@ private fun MainShell(viewModel: StoreViewModel, state: UiState) {
             when (val screen = state.current) {
                 Screen.Store -> StoreScreen(viewModel, state)
                 Screen.Categories -> CategoriesScreen(viewModel, state)
+                Screen.Wishlist -> WishlistScreen(viewModel, state)
                 Screen.Profile -> ProfileScreen(viewModel, state)
-                Screen.Connection -> ConnectionScreen(viewModel, state)
                 is Screen.Detail -> DetailScreen(viewModel, state, screen.id)
+                is Screen.Reviews -> ReviewsScreen(viewModel, state, screen.id)
                 Screen.Admin -> AdminScreen(viewModel, state)
                 Screen.AdminUsers -> AdminUsersScreen(state)
                 is Screen.AdminEditor -> AdminEditorScreen(viewModel, state, screen.id)
@@ -141,40 +142,28 @@ private fun TopBar(viewModel: StoreViewModel, state: UiState) {
             }
             Spacer(Modifier.width(PixelSpacing.medium))
             Text(
-                text = state.current.title,
+                text = topBarTitle(state),
                 style = MaterialTheme.typography.titleLarge,
                 color = PixelColors.Gold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            PixelBadge(
-                text = if (state.sourceKind == SourceKind.WORDPRESS) "WP" else "YEREL",
-                tone = if (state.sourceKind == SourceKind.WORDPRESS) BadgeTone.INSTALLED else BadgeTone.NEUTRAL
-            )
-            Spacer(Modifier.width(PixelSpacing.small))
             val session = state.session
             if (session != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickablePixel({
-                        feedback.tap()
-                        viewModel.openTab(Screen.Profile)
-                    }, "Profil")
-                ) {
-                    PixelIconImage(
-                        session.avatarSeed,
-                        if (session.isAdmin) "amber" else "azure",
-                        Modifier
-                            .size(32.dp)
-                            .pixelFrame(
-                                fill = Color.Transparent,
-                                border = if (session.isAdmin) PixelColors.Gold else PixelColors.Sky,
-                                corner = PixelColors.Ink,
-                                thickness = 2.dp
-                            )
-                    )
-                }
+                RemoteImage(
+                    url = session.avatarUrl,
+                    fallbackSeed = session.username,
+                    palette = if (session.isAdmin) "amber" else "azure",
+                    contentDescription = "Profil",
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickablePixel({
+                            feedback.tap()
+                            viewModel.openTab(Screen.Profile)
+                        }, "Profil")
+                )
             }
         }
         Box(
@@ -186,12 +175,29 @@ private fun TopBar(viewModel: StoreViewModel, state: UiState) {
     }
 }
 
+/**
+ * Üst çubuk başlığı.
+ *
+ * Oyun ekranlarında sabit "OYUN" yerine oyunun kendi adı yazılır; kullanıcı hangi kayda baktığını
+ * geri tuşuna basmadan görür. Kayıt henüz yüklenmediyse ekranın varsayılan başlığı kalır.
+ */
+private fun topBarTitle(state: UiState): String {
+    val detail = state.detail
+    return when (val screen = state.current) {
+        is Screen.Detail ->
+            if (detail?.id == screen.id && detail.title.isNotBlank()) detail.title else screen.title
+        is Screen.Reviews ->
+            if (detail?.id == screen.id && detail.title.isNotBlank()) detail.title else screen.title
+        else -> screen.title
+    }
+}
+
 /* ---- Alt sekmeler ---------------------------------------------------------------------------- */
 
 @Composable
 private fun BottomTabs(viewModel: StoreViewModel, state: UiState) {
     val feedback = LocalFeedback.current
-    // Yönetim sekmesi kullanıcı rolünde hiç oluşturulmaz; gizlenmiş bir düğüm bırakılmaz.
+    // Yönetim sekmesi kullanıcı rolünde hiç oluşturulmaz.
     val visible = tabs.filter { !it.adminOnly || state.isAdmin }
     val activeRoot = state.backStack.firstOrNull()
 
@@ -220,21 +226,22 @@ private fun BottomTabs(viewModel: StoreViewModel, state: UiState) {
                         }, tab.label)
                         .padding(vertical = PixelSpacing.small),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     PixelGlyphImage(
                         tab.glyph,
                         if (selected) PixelColors.Gold else PixelColors.TextTertiary,
-                        Modifier.size(18.dp)
+                        Modifier.size(17.dp)
                     )
                     Text(
                         text = tab.label,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (selected) PixelColors.Gold else PixelColors.TextTertiary
+                        color = if (selected) PixelColors.Gold else PixelColors.TextTertiary,
+                        maxLines = 1
                     )
                     Box(
                         Modifier
-                            .width(24.dp)
+                            .width(22.dp)
                             .height(2.dp)
                             .background(if (selected) PixelColors.Gold else Color.Transparent)
                     )
@@ -255,24 +262,18 @@ private fun SplashScreen() {
     ) {
         PixelCrestImage(Modifier.size(96.dp))
         Spacer(Modifier.height(PixelSpacing.large))
-        Text("PIXELSTORE", style = MaterialTheme.typography.displayLarge, color = PixelColors.Gold)
+        Text("RIASLINK", style = MaterialTheme.typography.displayLarge, color = PixelColors.Gold)
         Spacer(Modifier.height(PixelSpacing.small))
         Text(
-            "Piksel dünyanın uygulama mağazası",
+            "Oyun kütüphanesi yükleniyor",
             style = MaterialTheme.typography.bodyMedium,
             color = PixelColors.TextSecondary
         )
         Spacer(Modifier.height(PixelSpacing.xlarge))
-        SegmentBar(
-            ratio = 0.6f,
-            segments = 8,
-            onColor = PixelColors.Mint,
-            modifier = Modifier.width(160.dp)
-        )
+        SegmentBar(ratio = 0.6f, segments = 8, onColor = PixelColors.Mint, modifier = Modifier.width(160.dp))
     }
 }
 
-/** İşlem sürerken üstte akan ince şerit: "bir şey oluyor" bilgisini engelsiz verir. */
 @Composable
 private fun BusyStrip(modifier: Modifier = Modifier) {
     Row(
@@ -282,11 +283,7 @@ private fun BusyStrip(modifier: Modifier = Modifier) {
             .padding(horizontal = PixelSpacing.gutter, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            "YÜKLENİYOR",
-            style = MaterialTheme.typography.labelSmall,
-            color = PixelColors.Mint
-        )
+        Text("YÜKLENİYOR", style = MaterialTheme.typography.labelSmall, color = PixelColors.Mint)
         Spacer(Modifier.width(PixelSpacing.small))
         SegmentBar(ratio = 1f, segments = 12, onColor = PixelColors.MintDeep, height = 6.dp)
     }
@@ -304,11 +301,7 @@ private fun ToastOverlay(state: UiState, onConsume: () -> Unit) {
         }
     }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(
-            visible = message != null,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
+        AnimatedVisibility(visible = message != null, enter = fadeIn(), exit = fadeOut()) {
             val tone = message?.tone ?: MessageTone.INFO
             val border = when (tone) {
                 MessageTone.SUCCESS -> PixelColors.Mint
@@ -318,7 +311,7 @@ private fun ToastOverlay(state: UiState, onConsume: () -> Unit) {
             Row(
                 Modifier
                     .padding(PixelSpacing.gutter)
-                    .padding(bottom = 72.dp)
+                    .padding(bottom = 76.dp)
                     .fillMaxWidth()
                     .pixelFrame(fill = PixelColors.Surface, border = border)
                     .padding(PixelSpacing.medium),
@@ -344,12 +337,8 @@ private fun ToastOverlay(state: UiState, onConsume: () -> Unit) {
     }
 }
 
-/* ---- Onay penceresi -------------------------------------------------------------------------- */
+/* ---- Ortak pencereler ------------------------------------------------------------------------ */
 
-/**
- * Piksel temalı onay penceresi. Material AlertDialog yerine kendi çerçevesini çizer;
- * yuvarlak köşe ve gölge kullanmıyoruz.
- */
 @Composable
 fun PixelModal(
     title: String,
@@ -360,115 +349,119 @@ fun PixelModal(
     confirmTone: PixelButtonTone = PixelButtonTone.DANGER,
     dismissLabel: String = "Vazgeç"
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier
                 .padding(PixelSpacing.xlarge)
                 .fillMaxWidth()
-                .pixelFrame(
-                    fill = PixelColors.Surface,
-                    border = PixelColors.Gold,
-                    corner = PixelColors.Backdrop
-                )
+                .pixelFrame(fill = PixelColors.Surface, border = PixelColors.Gold, corner = PixelColors.Backdrop)
                 .padding(PixelSpacing.large),
             verticalArrangement = Arrangement.spacedBy(PixelSpacing.medium)
         ) {
             Text(title, style = MaterialTheme.typography.titleLarge, color = PixelColors.Gold)
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = PixelColors.TextPrimary
-            )
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(PixelSpacing.medium)
-            ) {
-                PixelButton(
-                    text = dismissLabel,
-                    onClick = onDismiss,
-                    tone = PixelButtonTone.GHOST,
-                    modifier = Modifier.weight(1f)
-                )
-                PixelButton(
-                    text = confirmLabel,
-                    onClick = onConfirm,
-                    tone = confirmTone,
-                    modifier = Modifier.weight(1f)
-                )
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = PixelColors.TextPrimary)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(PixelSpacing.medium)) {
+                PixelButton(dismissLabel, onDismiss, tone = PixelButtonTone.GHOST, modifier = Modifier.weight(1f))
+                PixelButton(confirmLabel, onConfirm, tone = confirmTone, modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
-/** Ekran görüntüsü tam ekran görüntüleyici. */
+/** Serbest metin isteyen pencere (hata bildirimi gibi). */
 @Composable
-fun ShotViewer(
+fun PixelPromptModal(
     title: String,
-    shots: List<com.waifuhtr.pixelstore.data.Screenshot>,
-    palette: String,
-    startIndex: Int,
+    description: String,
+    placeholder: String,
+    confirmLabel: String,
+    onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    if (shots.isEmpty()) return
-    var index by remember { mutableStateOf(startIndex.coerceIn(0, shots.lastIndex)) }
-    val feedback = LocalFeedback.current
-    val shot = shots[index]
-
+    var value by remember { mutableStateOf("") }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier
                 .padding(PixelSpacing.large)
                 .fillMaxWidth()
-                .pixelFrame(fill = PixelColors.Surface, border = PixelColors.Gold)
+                .pixelFrame(fill = PixelColors.Surface, border = PixelColors.Rose, corner = PixelColors.Backdrop)
                 .padding(PixelSpacing.large),
-            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(PixelSpacing.medium)
         ) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = PixelColors.Gold)
-            ShotFrame(shot = shot, palette = palette, scale = 2.4f)
-            Text(
-                text = "${index + 1} / ${shots.size}" +
-                    if (shot.caption.isNotBlank()) " — ${shot.caption}" else "",
-                style = MaterialTheme.typography.bodySmall,
-                color = PixelColors.TextSecondary,
-                textAlign = TextAlign.Center
+            Text(title, style = MaterialTheme.typography.titleLarge, color = PixelColors.Rose)
+            Text(description, style = MaterialTheme.typography.bodyMedium, color = PixelColors.TextSecondary)
+            PixelTextField(
+                value = value,
+                onValueChange = { value = it },
+                placeholder = placeholder,
+                singleLine = false,
+                minLines = 4,
+                imeAction = ImeAction.Default
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(PixelSpacing.large)) {
-                PixelButton("ÖNCEKİ", {
-                    feedback.tap(Sfx.MOVE, 8)
-                    index = (index - 1 + shots.size) % shots.size
-                }, tone = PixelButtonTone.GHOST, glyph = "left")
-                PixelButton("SONRAKİ", {
-                    feedback.tap(Sfx.MOVE, 8)
-                    index = (index + 1) % shots.size
-                }, tone = PixelButtonTone.GHOST, glyph = "right")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(PixelSpacing.medium)) {
+                PixelButton("Vazgeç", onDismiss, tone = PixelButtonTone.GHOST, modifier = Modifier.weight(1f))
+                PixelButton(
+                    text = confirmLabel,
+                    onClick = { onConfirm(value) },
+                    tone = PixelButtonTone.DANGER,
+                    enabled = value.trim().length >= 5,
+                    modifier = Modifier.weight(1f)
+                )
             }
-            PixelButton("KAPAT", onDismiss, tone = PixelButtonTone.PRIMARY, modifier = Modifier.fillMaxWidth())
         }
     }
 }
 
-/** Ekran görüntüsünü doğru en/boy oranıyla, tam sayı ölçekle çizer. */
+/** Tam ekran görsel görüntüleyici (ekran görüntüleri). */
 @Composable
-fun ShotFrame(
-    shot: com.waifuhtr.pixelstore.data.Screenshot,
-    palette: String,
-    scale: Float,
-    modifier: Modifier = Modifier
+fun ScreenshotViewer(
+    title: String,
+    urls: List<String>,
+    startIndex: Int,
+    onDismiss: () -> Unit
 ) {
-    val kind = shot.kind
-    com.waifuhtr.pixelstore.ui.art.PixelShotImage(
-        seed = shot.seed,
-        scene = shot.scene,
-        palette = palette,
-        kind = kind,
-        modifier = modifier
-            .size(width = (kind.w * scale).dp, height = (kind.h * scale).dp)
-    )
-}
+    if (urls.isEmpty()) return
+    var index by remember { mutableStateOf(startIndex.coerceIn(0, urls.lastIndex)) }
+    val feedback = LocalFeedback.current
 
-/** Sahne adını arayüzde göstermek için. */
-val PixelArt.Scene.turkishLabel: String get() = label
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            Modifier
+                .padding(PixelSpacing.medium)
+                .fillMaxWidth()
+                .pixelFrame(fill = PixelColors.Surface, border = PixelColors.Gold)
+                .padding(PixelSpacing.medium),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(PixelSpacing.medium)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = PixelColors.Gold, maxLines = 1)
+            RemoteImage(
+                url = urls[index],
+                fallbackSeed = title,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp)
+            )
+            Text(
+                "${index + 1} / ${urls.size}",
+                style = MaterialTheme.typography.bodySmall,
+                color = PixelColors.TextSecondary,
+                textAlign = TextAlign.Center
+            )
+            if (urls.size > 1) {
+                Row(horizontalArrangement = Arrangement.spacedBy(PixelSpacing.large)) {
+                    PixelButton("ÖNCEKİ", {
+                        feedback.tap(Sfx.MOVE, 8)
+                        index = (index - 1 + urls.size) % urls.size
+                    }, tone = PixelButtonTone.GHOST, glyph = "left")
+                    PixelButton("SONRAKİ", {
+                        feedback.tap(Sfx.MOVE, 8)
+                        index = (index + 1) % urls.size
+                    }, tone = PixelButtonTone.GHOST, glyph = "right")
+                }
+            }
+            PixelButton("KAPAT", onDismiss, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}

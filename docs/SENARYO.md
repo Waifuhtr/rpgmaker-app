@@ -1,17 +1,19 @@
-# PixelStore — Senaryo (v2)
+# PixelStore — Senaryo (v3)
 
 Bu belge uygulamanın kurgusunu, ekran akışını, veri modelini ve rol ayrımını tarif eder.
-Uygulanan hâli `app/src/main/` ve `wordpress-plugin/` altındadır.
+Uygulanan hâli `app/src/main/` ve `wordpress-plugin/pixelstore-bridge/` altındadır.
 
-> **v1 → v2 değişikliği.** v1'de arayüz WebView içinde HTML/CSS/JS idi ve veri cihazdaydı.
-> v2'de WebView tamamen kaldırıldı: her ekran Jetpack Compose ile yerel olarak çiziliyor ve
-> veritabanı olarak WordPress kullanılabiliyor. Arayüz okunabilirlik için baştan tasarlandı.
+> **v2 → v3 değişikliği.** v2'de iki veri kaynağı vardı (cihazdaki tohum katalog + isteğe bağlı
+> WordPress) ve iki demo hesap gömülüydü. v3'te **tek kaynak** var: riaslink.fun. Demo bölümü
+> tamamen kaldırıldı, kullanıcı veritabanı sitenin WordPress kullanıcı tablosu oldu, eklenti
+> temanın kendi kayıt tipini okuduğu için sitede yayımlanmış tüm eski oyunlar kendiliğinden
+> göründü. Uygulamaya istek listesi, puanlama, yorum, profil fotoğrafı ve canlı arama eklendi.
 
 ## 1. Konsept
 
-PixelStore, bir uygulama mağazasının işlevlerini RPG Maker estetiğinde sunan bir vitrindir.
-Gerçek bir dağıtım altyapısı değildir. Amaç, "mağaza" fikrini 8-bit bir arayüzle tam olarak kurmak
-ve üzerine gerçek yetki ayrımı olan bir yönetim paneli eklemektir.
+PixelStore, riaslink.fun'da yayımlanan oyun kütüphanesini RPG Maker estetiğinde sunan bir Android
+uygulamasıdır. Sitenin bir kopyası değil, **aynı veritabanının ikinci arayüzüdür**: uygulamada
+yapılan her işlem sitede, sitede yapılan her işlem uygulamada görünür.
 
 **Görsel dil**
 
@@ -19,177 +21,254 @@ ve üzerine gerçek yetki ayrımı olan bir yönetim paneli eklemektir.
   (piksel yazı tipinde uzun metin okunmuyor — v1'in en büyük sorunuydu)
 - Koyu lacivert üç yüzey kademesi + altın/nane/gök/gül/mor vurgular
 - Yuvarlak köşe yok: çerçeveler `drawBehind` ile çizilen pahlı piksel kenarlar
-- Düğmelerde kabartma (üst kenarda ışık, alt kenarda gölge)
+- Düğmelerde kabartma (üst kenarda ışık, alt kenarda gölge); pasif düğme nötr griye düşer
 - Sürekli dolgu yerine **segment çubuklar** (8-bit hissi + oran gözle sayılabiliyor)
-- Tüm ikon ve ekran görüntüleri tohumdan üretilen piksel çizimleri
+- Kapak ve ekran görüntüleri **gerçek** — WordPress medya kütüphanesinden gelir. Görsel yoksa
+  tohumdan üretilen piksel sahne yer tutucu olur (boş gri kutu görünmez)
 - Sesler `AudioTrack` ile üretilen kare/üçgen dalgalar; ses dosyası yok
 
-## 2. Veri kaynağı seçimi
+## 2. Veri kaynağı
 
-Uygulama iki kipte çalışır ve kip üst çubukta rozet olarak görünür.
+Tek kaynak: `https://riaslink.fun/wp-json/pixelstore/v2`
 
-**Yerel kip (varsayılan).** Katalog `assets/catalog_seed.json` içinden tohumlanıp cihazın özel
-dizinine kopyalanır; yazma atomiktir. Hesaplar gömülüdür (`admin`/`user`). İnternet gerekmez —
-APK kurulduğu anda çalışır.
+Adres `app/build.gradle.kts` içinde `BuildConfig.API_BASE` olarak gömülüdür. Uygulamada sunucu
+alanı **yoktur** — kullanıcı adres girmez, değiştiremez. Giriş ekranındaki "sunucu bağlantısını
+sına" düğmesi yalnızca `/health` ucunu yoklar.
 
-**WordPress kipi.** Profil → Bağlantı ayarları'na site adresi girilir. Kayıtlar WordPress'te
-`pixelstore_app` özel yazı tipinde, türler `pixelstore_category` taksonomisinde tutulur. Hesaplar
-sitenin WordPress kullanıcılarıdır.
-
-Kaynak değiştiğinde oturum sıfırlanır: iki kaynağın hesapları farklıdır.
+Cihazda tutulan tek veri: oturum jetonu, ses tercihi, titreşim tercihi. Parola saklanmaz.
 
 ## 3. Roller
 
-| Rol | Yerel kip | WordPress kipi |
-|---|---|---|
-| Yönetici | `admin` / `admin123` | `manage_options` veya `edit_others_posts` yeteneği olan kullanıcı |
-| Kullanıcı | `user` / `user123` | diğer tüm kullanıcılar |
+| Rol | Karşılığı |
+|---|---|
+| Yönetici | `manage_options` **veya** `edit_others_posts` yeteneği olan WordPress kullanıcısı |
+| Kullanıcı | sitedeki diğer tüm kullanıcılar |
 
 Kural: **yönetim yalnızca yöneticide görünür, kullanıcıda hiç yoktur.** Üç katmanda uygulanır:
 
-1. **Veri** — kullanıcı rolünde katalog yükü taslak kayıtları ve `published`/`createdAt`
-   alanlarını hiç içermez.
-2. **Kaynak** — `saveApp`, `deleteApp`, `setPublished`, `users`, `stats`, `resetCatalog` yönetici
-   değilse veri değil hata döner. Yerel kipte `LocalCatalogSource`, WordPress kipinde sunucudaki
-   yetenek denetimi karar verir.
-3. **Arayüz** — Yönetim sekmesi kullanıcı rolünde hiç oluşturulmaz; `openTab`/`push` da `adminOnly`
+1. **Veri** — kullanıcı rolünde sorgu taslak (`draft`) kayıtları hiç döndürmez; `PSB_Query::games()`
+   yayın durumunu `$is_admin` bayrağına göre kurar.
+2. **Uç** — yönetim uçları `permission_admin` ile korunur: kullanıcı jetonuyla çağrılırsa 403
+   döner. Puan, indirme ve görüntülenme sayaçları yazma ucundan hiç kabul edilmez (yalnızca
+   kendi uçları artırır).
+3. **Arayüz** — Yönetim sekmesi kullanıcı rolünde hiç oluşturulmaz; `openTab`/`push` `adminOnly`
    ekranları reddeder ve her yönetim ekranı kendi başına rolü bir kez daha doğrular.
 
-Oturum sürdürülürken rol, kalıcı tercihlerden değil hesap tablosundan (veya sunucudan) okunur;
-tercihler kurcalansa bile yetki yükseltilemez.
+Rol her istekte sunucudan okunur, cihazdaki tercihlerden değil. Tercihler kurcalansa bile yetki
+yükseltilemez.
 
-## 4. Ekran akışı
+## 4. Oturum
+
+```
+Giriş  ─► POST /auth/login {username, password}
+          └─ wp_authenticate() → jeton: "<kullanıcı_id>.<48 hex>"
+             sunucuda yalnızca sha256(jeton) saklanır (_psb_tokens kullanıcı metası)
+             30 gün ömür · kullanıcı başına en çok 5 cihaz (en eskisi düşer)
+
+Açılış ─► GET /auth/me   (Authorization: Bearer <jeton>)
+          ├─ geçerli  → doğrudan mağaza
+          └─ geçersiz → jeton silinir, giriş ekranı
+
+Çıkış  ─► POST /auth/logout → o jetonun özeti listeden silinir
+```
+
+## 5. Ekran akışı
 
 ```
 Açılış perdesi
    │
-   ├─ oturum yoksa ──► Giriş
-   │                     ├─ demo hesap kartları (yerel kipte)
-   │                     ├─ manuel form
-   │                     └─ sunucu / bağlantı paneli (açılır-kapanır)
+   ├─ jeton yoksa/geçersizse ──► Giriş (site hesabı · demo yok)
    │
-   └─ oturum varsa ───► Mağaza
-                          ├─ Haftanın oyunu afişi
-                          ├─ Arama · tür çipleri · sıralama
-                          └─ Kart ──► Kayıt detayı
-                                        ├─ İndirme akışı (segment çubuk)
-                                        ├─ Galeri ──► tam ekran görüntüleyici
-                                        └─ [yalnız admin] "Bu kaydı düzenle"
+   └─ jeton geçerliyse ────────► Mağaza
+                                  ├─ Canlı arama (yazarken sonuç açılır)
+                                  ├─ Öne çıkan oyun afişi
+                                  ├─ Katlanabilir filtreler + sıralama
+                                  └─ Kart ──► Oyun sayfası
+                                                ├─ İndirme (geri sayım + arşiv parolası)
+                                                ├─ Puanlama 1–5
+                                                ├─ Galeri ──► tam ekran görüntüleyici
+                                                ├─ Yorumlar ──► yorum yaz / oyla / sil
+                                                ├─ Hata bildir
+                                                └─ [yalnız admin] "Bu oyunu düzenle"
 
-Sekmeler: Mağaza · Türler · Profil · [yalnız admin] Yönetim
-Profil → Bağlantı ayarları → WordPress adresi / sınama / kurulum adımları
+Sekmeler: Mağaza · Türler · Listem · Profil · [yalnız admin] Yönetim
 ```
 
 **Geri tuşu:** `BackHandler` → `StoreViewModel.back()`. Yığında bir adım geri gider; kök ekranda
 değilse mağazaya döner; mağazadayken `false` döner ve Activity kapanır.
 
-## 5. Ekranlar
+## 6. Ekranlar
 
 ### Giriş
-Arma (başlatıcı ikonuyla aynı çizim), aktif veri kaynağı rozeti, form, hata paneli. Yerel kipte iki
-demo hesap kartı (tohumdan üretilen avatarlarla); WordPress kipinde bunun yerine açıklama paneli.
-Altta açılır bağlantı paneli — kullanıcı oturum açmadan da sunucu adresini girebilmeli.
+Arma (başlatıcı ikonuyla aynı çizim), kullanıcı adı/e-posta + parola, hata paneli, sunucu sınama
+düğmesi, gömülü site adresi. Demo hesap kartı yok.
 
 ### Mağaza
-- **Haftanın oyunu:** en yüksek `puan × log(indirme)` skorlu yayındaki kayıt, geniş afiş oranında
-- **Arama:** başlık, geliştirici, tür ve etiketlerde eşleşme
-- **Tür çipleri:** yatay kaydırmalı, piksel simgeli, ikinci dokunuşta temizlenir
-- **Sıralama:** Öne çıkan · İndirme · Puan · Yeni
-- **Kart:** 64dp ikon + dört bilgi kademesi (başlık, geliştirici, açıklama, ölçüler) + rozetler
+- **Canlı arama:** 320 ms gecikmeli, iptal edilebilir; sunucudan hafif yük (`/search`, en az 2
+  karakter) çekip listenin üstünde açılır. Klavyedeki arama tuşu tam listeye geçer.
+- **Öne çıkan:** sitede öne çıkan/editörün seçimi işaretli kayıt, 16:9 kapakla
+- **Filtreler:** varsayılan kapalı tek satır; açılınca tür · platform · dil · durum çip satırları.
+  Kapalıyken seçili filtreler rozet olarak görünür.
+- **Sıralama:** En yeni · İndirme · Puan · A-Z
+- **Kart:** 74×104 gerçek kapak + dört bilgi kademesi (başlık, geliştirici, tanıtım, ölçüler) +
+  rozetler + istek listesi kalbi
+- **Sonsuz kaydırma:** son üç karta yaklaşınca sonraki sayfa istenir
 
-### Kayıt detayı
-88dp ikon, tür ve yaş rozetleri, üçlü ölçü şeridi (puan/indirme/boyut, dikey çizgilerle ayrılmış),
-indirme düğmesi + segment ilerleme, ekran görüntüsü şeridi (dokununca tam ekran görüntüleyici,
-ileri/geri), paragraflara ayrılmış açıklama, etiketler, bilgi tablosu. Yöneticiye ek olarak
-"bu kaydı düzenle" düğmesi.
+### Oyun sayfası
+Kahraman görseli (üstten şeffaf, alta doğru koyulaşan perde) + 86×120 kapak, ölçü şeridi
+(puan/oy · indirme · boyut), indirme düğmesi + istek listesi, alternatif link, puanlama paneli
+(5 dokunulabilir kutu, site ortalaması altta), ekran görüntüsü şeridi (dokununca tam ekran),
+açıklama · değişiklik günlüğü · kurulum rehberi, sistem gereksinimleri (minimum + önerilen),
+bilgi tablosu, etiketler, yorumlar düğmesi, fragman, hata bildirimi. Yöneticiye ek olarak
+"bu oyunu düzenle".
+
+**İndirme akışı:** onay → 3 saniye geri sayım → arşiv parolası varsa gösterilir → "hemen aç".
+Sayaç sunucuda artar (`game_download_count`), yani sitedeki sayı da artar.
+
+### Yorumlar
+Tavsiye ediyor/etmiyor seçimi + metin (en az 3 karakter). Bir kullanıcı bir oyuna bir kez yorum
+yazabilir (temanın kuralı). Yorum kartında yazarın rozetleri, tavsiye durumu, faydalı/faydasız
+oyları; kendi yorumunu silebilir, kendi yorumuna oy veremez.
 
 ### Türler
-Tür kutuları: glif, ad, kayıt sayısı ve dağılım çubuğu. Seçim mağazayı o türe filtreler.
+Dört taksonominin karoları: tür · platform · dil · durum. Karoda sitede terime atanmış emoji
+varsa o, yoksa terimin baş harfi çizilir (5×5 nesne glifleri bu boyutta birbirinden ayırt
+edilemiyordu). Kayıt sayısı ve dağılım çubuğu her karoda. Dokununca mağaza o filtreyle açılır.
+
+### Listem
+İstek listesi — sitedeki `sl_favorites` ile aynı liste. Sekmeye her girişte tazelenir, çünkü
+site tarafından da değişebilir.
 
 ### Profil
-Avatar, ad, rol rozeti; kütüphane; ses ve titreşim anahtarları; bağlantı ayarlarına geçiş;
-paket/sürüm/kaynak bilgileri; onaylı çıkış.
+Profil fotoğrafı (dokununca sistem görsel seçici; depolama izni istemez), ad, rol rozeti,
+rozetler/başarımlar, istek listesi ve yorum sayacı, ses ve titreşim anahtarları, sunucu/katılım/
+sürüm bilgileri, onaylı çıkış. Kendi yüklediği fotoğraf varsa "fotoğrafı kaldır" da görünür.
 
 ### Yönetim — yalnızca admin
-- **Özet kartları:** toplam kayıt, yayında, taslak, toplam indirme, ortalama puan
+- **Özet karoları:** toplam oyun, yayında, taslak, indirme, görüntülenme, ortalama puan, yorum,
+  kullanıcı, açık hata raporu
 - **Tür dağılımı:** segment çubuklar
-- **Hızlı işlemler:** yeni kayıt · kullanıcılar · katalogu sıfırla (onaylı)
-- **Katalog yönetimi:** her satırda düzenle / yayın durumu / sil (silme onaylı)
-- **Kayıt düzenleyici:** ikon tohumu ve palet **canlı önizlemeli**; künye alanları; yayın anahtarı;
-  metinler; ekran görüntüsü editörü (sahne, cihaz tipi, başlık, varyasyon üretme, kaldırma —
-  en fazla 8)
-- **Kullanıcılar:** hesap listesi ve roller. Parola bilgisi arayüze hiç gönderilmez.
+- **Katalog yönetimi:** her satırda düzenle / yayın durumu / sil (çöp kutusuna, kalıcı değil)
+- **Kullanıcılar:** site kullanıcıları, rolleri, katılım tarihi, istek sayısı. Parola bilgisi
+  arayüze hiç gönderilmez; kullanıcı ekleme/silme wp-admin'in işi.
+- **Oyun düzenleyici:** kapak yükleme, ekran görüntüsü ekleme/kaldırma, künye alanları,
+  taksonomi seçimi (olmayan terim yazılırsa oluşturulur), metinler, indirme linkleri, sistem
+  gereksinimleri. Kaydedilen her alan doğrudan siteye yazılır.
 
-## 6. Veri modeli
+## 7. Veri modeli
+
+Uygulama kendi şemasını dayatmaz; temanın alanlarını okur. `PSB_Mapper` tek sözleşmedir.
 
 ```jsonc
 {
-  "id": "ay-kalesi-gunlukleri",   // WordPress'te post_name (slug)
-  "title": "Ay Kalesi Günlükleri",
+  "id": "golge-vadisi",            // post_name (slug)
+  "title": "Gölge Vadisi",
+  "subtitle": "Tam Türkçe",
   "developer": "Kuzey Fener Stüdyo",
-  "category": "RPG",              // WordPress'te pixelstore_category terimi
-  "version": "2.4.1",
-  "sizeMb": 148.0,
-  "rating": 4.7,
-  "ratingCount": 18240,
-  "installs": 412300,             // türetilmiş: forma yazılamaz, /install artırır
-  "contentRating": "12+",
-  "published": true,              // admin-only alan; WP'de post_status
-  "updatedAt": "2026-07-02",
-  "iconSeed": "ay-kalesi-01",     // ikon bu tohumdan çizilir
-  "palette": "azure",             // emerald | amber | crimson | azure | violet | slate | mint
+  "publisher": "…",
+  "version": "v1.3",
+  "sizeLabel": "2.4 GB",           // game_size — serbest metin, sayı değil
+  "releaseDate": "2026-05-01",
+  "ageRating": "+16",
+  "genre": "RPG",                  // game_genre terimi
+  "platform": "Android",           // game_platform terimi
+  "language": "Türkçe",            // game_language terimi
+  "status": "Tamamlandı",          // game_status terimi
+  "rating": 4.6,                   // sl_user_rating_avg
+  "ratingCount": 184,
+  "downloadCount": 41200,          // game_download_count
+  "viewCount": 96240,
+  "published": true,               // post_status; taslak yalnızca yöneticide
+  "featured": false,
+  "editorsChoice": true,
+  "favorited": false,              // isteği yapan kullanıcıya göre
+  "userRating": 4,                 // isteği yapan kullanıcının oyu
+  "coverUrl": "https://…",         // öne çıkan görsel (steamlike-cover)
+  "heroUrl": "https://…",
+  "screenshots": [ { "id": 812, "url": "…", "fullUrl": "…" } ],
+  "excerpt": "…",
+  "description": "…",             // düz metne çevrilir, madde imleri korunur
+  "changelog": "…",
+  "installGuide": "…",
   "tags": ["Sıra tabanlı", "Hikâye"],
-  "shortDescription": "…",
-  "longDescription": "…",         // WordPress'te post_content
-  "downloadUrl": "",
-  "screenshots": [
-    { "seed": "ay-1", "kind": "phone", "scene": "title", "caption": "Açılış ekranı" }
-  ]
+  "downloadUrl": "…",
+  "mirrorUrl": "…",
+  "archivePassword": "…",          // yalnızca indirme ucundan döner
+  "trailerUrl": "…",
+  "requirements": {
+    "hasMinimum": true, "hasRecommended": true,
+    "minimum":     { "os": "…", "cpu": "…", "ram": "…", "gpu": "…", "storage": "…" },
+    "recommended": { "os": "…", "cpu": "…", "ram": "…", "gpu": "…", "storage": "…" }
+  }
 }
 ```
 
-`scene`: `title` · `field` · `battle` · `town` · `cave` · `menu`
-`kind`: `phone` (108×192) · `tablet` (176×132) — ayrıca yalnızca afiş için `banner` (208×94)
+Açıklama alanları HTML'den düz metne çevrilir: paragraf araları `\n\n`, liste maddeleri `• `
+olur. `the_content` filtresi bilinçli olarak **uygulanmaz** — tema kısa kodları uygulamada
+işlenemez, çıktıya ham kod düşmesin.
 
-Aynı JSON şeması iki kaynakta da kullanılır, bu yüzden `Json` nesnesindeki tek ayrıştırıcı ikisine
-de hizmet eder. Tohum katalogda 8 kayıt vardır; biri (`Gölge Loncası`) bilinçli olarak
-**yayınlanmamıştır** — rol ayrımını canlı göstermek için: kullanıcı 7 kayıt görür, yönetici 8.
+## 8. WordPress arka ucu
 
-## 7. WordPress arka ucu
+`wordpress-plugin/pixelstore-bridge` eklentisi:
 
-`wordpress-plugin/pixelstore-api` eklentisi:
+| Dosya | Görevi |
+|---|---|
+| `pixelstore-bridge.php` | önyükleme, sabitler, tema var mı denetimi |
+| `class-psb-auth.php` | jeton üret/doğrula/sil, oturum yükü, rozetler, avatar adresi |
+| `class-psb-mapper.php` | app ↔ site alan eşlemesi (tek sözleşme) |
+| `class-psb-query.php` | listeleme, sayfalama, arama, filtre, sıralama, taksonomi, istatistik |
+| `class-psb-social.php` | istek listesi, puanlama, yorum, yorum oyu, indirme/görüntülenme, rapor |
+| `class-psb-write.php` | yönetici oluşturma/güncelleme/silme, terim atama |
+| `class-psb-media.php` | görsel yükleme (avatar, kapak, ekran görüntüsü) |
+| `class-psb-rest.php` | uçlar ve izin geri çağrıları |
+| `class-psb-admin.php` | wp-admin durum ekranı (Ayarlar → PixelStore) |
 
-- `pixelstore_app` özel yazı tipi (public=false; kayıtlar ön yüzde sayfa açmaz) + `pixelstore_category`
-- Uygulama alanları meta olarak (`_ps_*`), ekran görüntüleri ve etiketler JSON meta olarak
-- Jeton tabanlı oturum: `wp_authenticate()` ile doğrulama, jetonun yalnızca SHA-256 özeti kullanıcı
-  metasında, 30 gün ömür, kullanıcı başına 5 cihaz
-- `/wp-json/pixelstore/v1/`: `health`, `auth/login`, `auth/me`, `auth/logout`, `catalog`,
-  `apps`, `apps/{id}`, `apps/{id}/install`, `apps/{id}/published`, `users`, `stats`, `seed`
-- wp-admin → PixelStore ekranı: bağlanacak adres, durum tablosu, demo katalog kurulumu, uç listesi,
-  sorun giderme (Authorization başlığı düşen sunucular için `CGIPassAuth On` notu)
+Kendi kayıt tipi tanımlamaz. `uninstall.php` yalnızca eklentinin kendi ürettiği verileri
+(`_psb_tokens`, `psb_avatar_attachment`, `psb_rating_voters`, `psb_review_voters`) siler —
+temanın verisine dokunmaz.
 
-## 8. Derleme ve dağıtım
+### Testler
+
+`wordpress-plugin/tests/` altında WordPress kurulumu gerektirmeyen bir test takımı vardır:
+`wp-stubs.php` küçük bir sahte WordPress (post/kullanıcı/yorum/terim tabloları, `WP_Query`,
+`WP_REST_Request`) kurar, `bridge-test.php` 130 doğrulama koşar — oturum ve yetki, alan eşleme,
+taslak görünürlüğü, filtre/sıralama/arama, istek listesi, puanlama, yorumlar ve oylar, sayaçlar,
+hata raporu, yönetim yazma, istatistik, profil fotoğrafı.
+
+```bash
+php wordpress-plugin/tests/bridge-test.php   # 130 geçti, 0 başarısız
+```
+
+## 9. Tema
+
+`wordpress-theme/steamlike/` temanın **değiştirilmemiş** kopyasıdır; ileride karşılaştırma
+gerekirse diye depoda tutulur. Eklenti temanın alanlarını olduğu gibi kullandığı için tema
+üzerinde değişiklik gerekmedi — güncellemeniz gereken bir tema zip'i yok.
+
+## 10. Derleme ve dağıtım
 
 - **Yerel:** `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`
 - **Depoda hazır APK:** `release/PixelStore-debug.apk` her sürümde güncellenir
 - **Tasarımı görmek:** `./gradlew :app:testDebugUnitTest --tests '*DesignScreenshotTest'` →
   `app/build/screenshots/*.png` (emülatör gerekmez; Robolectric yerel grafik kipi)
-- **Hugging Face Space:** `scripts/make-space-zip.sh` → Docker SDK'lı Space APK derler, açılış
-  sayfasında APK + kaynak zip + WordPress eklentisi zip + build günlüğü sunar
-- **İmzalama:** `keystore.properties` varsa release imzalanır; yoksa imzasız çıkar
+- **Hugging Face Space:** `scripts/make-space-zip.sh` → Docker SDK'lı Space APK derler, eklenti
+  testini koşar, açılış sayfasında APK + eklenti zip + tema zip + kaynak zip + günlükler sunar
+- **İmzalama:** `keystore.properties` varsa release imzalanır; yoksa imzasız çıkar. İmza dosyaları
+  depoya hiç girmez.
 
-## 9. Bilinçli sınırlar
+## 11. Bilinçli sınırlar
 
-- "İndir" gerçek bir APK indirmez; sayacı artırıp kaydı kütüphaneye ekler. Kayda `downloadUrl`
-  yazılırsa detayda ayrı bir düğme çıkar.
-- Uygulamadan kullanıcı eklenip silinemez; yönetici listeyi görür. WordPress kipinde kullanıcı
-  yönetimi wp-admin'in işi.
-- Yorum/puan yazma akışı yok; puanlar katalog verisinden gelir.
-- Uzak görsel desteği yok: tüm görseller cihazda üretilir.
+- Uygulamadan kullanıcı eklenip silinemez; yönetici listeyi görür. Kullanıcı yönetimi wp-admin'in
+  işi.
+- Yorum silmeyi kullanıcı yalnızca kendi yorumu için yapabilir; moderasyon kuyruğu wp-admin'de.
+- Hata raporları uygulamada listelenmez; yönetim panelinde sayısı görünür, içerik wp-admin'de
+  okunur (`sl_report` kayıtları).
+- Çevrimdışı katalog yok: veri her açılışta siteden gelir. Görseller Coil ile disk önbelleğinde
+  tutulur, ağ yokken en son görülen kapaklar görünür ama liste boş gelir.
 
-## 10. Sonraki adımlar (isteğe bağlı)
+## 12. Sonraki adımlar (isteğe bağlı)
 
-- Gerçek APK yükleme: yöneticinin dosya seçip kayda iliştirmesi (SAF + WordPress medya kütüphanesi)
-- Yorum/puan akışı ve moderasyon kuyruğu
-- Çevrimdışı önbellek: WordPress kipinde son katalogu cihazda tutup ağ yokken göstermek
+- Yeni oyun yayımlandığında bildirim (FCM veya periyodik yoklama)
+- Çevrimdışı önbellek: son listeyi cihazda tutup ağ yokken göstermek
 - Release imzası + Play Store paketleme (AAB)
+- Uygulama içinden hata raporu yanıtlama (yönetici)

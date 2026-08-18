@@ -4,8 +4,10 @@ PixelStore Space sunucusu.
 
 Yalnızca Python standart kütüphanesini kullanır. Görevi:
   - Derleme çıktılarını (APK, kaynak zip, build günlüğü) indirilebilir yapmak
-  - WordPress eklentisini indirilebilir zip olarak sunmak
-  - Durumu piksel temalı bir açılış sayfasında göstermek
+  - WordPress eklentisini ve tema kopyasını indirilebilir zip olarak sunmak
+  - Eklenti testinin sonucunu ve derleme durumunu piksel temalı bir sayfada göstermek
+
+Uygulamanın veritabanı riaslink.fun'dır; adres APK içine gömülüdür, burada ayarlanmaz.
 
 Hugging Face Spaces uygulamayı $PORT (varsayılan 7860) üzerinden bekler.
 """
@@ -23,7 +25,12 @@ PORT = int(os.environ.get("PORT", "7860"))
 APK_NAME = "PixelStore-debug.apk"
 SOURCE_NAME = "pixelstore-source.zip"
 PLUGIN_NAME = "pixelstore-wordpress-plugin.zip"
+THEME_NAME = "steamlike-theme.zip"
 LOG_NAME = "build-log.txt"
+PLUGIN_LOG_NAME = "plugin-test-log.txt"
+
+# Uygulamanın gömülü sunucu adresi; sayfada bilgi olarak gösterilir.
+SITE = "riaslink.fun"
 
 
 def artifact_path(name):
@@ -128,10 +135,11 @@ li { margin-bottom:8px; color:#cfcfe6; }
       <rect x="8" y="14" width="2" height="1" fill="#1b1b2f"/>
     </svg>
     <h1>PIXELSTORE</h1>
-    <p class="muted" style="text-align:center">RPG Maker tarzı piksel uygulama mağazası · Kotlin + Jetpack Compose</p>
+    <p class="muted" style="text-align:center">$site oyun kütüphanesi · Kotlin + Jetpack Compose</p>
   </div>
 
   <div class="status status--$status_class">$status_text</div>
+  <div class="status status--$plugin_status_class">$plugin_status_text</div>
 
   <div class="frame">
     <h2>İNDİRMELER</h2>
@@ -139,42 +147,53 @@ li { margin-bottom:8px; color:#cfcfe6; }
       <a class="btn btn--gold" href="/$apk_name" $apk_disabled download>
         <span>APK İNDİR</span><small>$apk_size</small>
       </a>
-      <a class="btn" href="/$source_name" $source_disabled download>
-        <span>KAYNAK KODU (ZIP)</span><small>$source_size</small>
-      </a>
       <a class="btn btn--mint" href="/$plugin_name" $plugin_disabled download>
         <span>WORDPRESS EKLENTİSİ (ZIP)</span><small>$plugin_size</small>
       </a>
+      <a class="btn" href="/$theme_name" $theme_disabled download>
+        <span>STEAMLIKE TEMA (ZIP)</span><small>$theme_size</small>
+      </a>
+      <a class="btn" href="/$source_name" $source_disabled download>
+        <span>KAYNAK KODU (ZIP)</span><small>$source_size</small>
+      </a>
       <a class="btn" href="/$log_name" $log_disabled>
         <span>BUILD GÜNLÜĞÜ</span><small>$log_size</small>
+      </a>
+      <a class="btn" href="/$plugin_log_name" $plugin_log_disabled>
+        <span>EKLENTİ TEST GÜNLÜĞÜ</span><small>$plugin_log_size</small>
       </a>
     </div>
   </div>
 
   <div class="frame">
-    <h2>DEMO HESAPLAR</h2>
-    <table>
-      <tr><th>ROL</th><th>KULLANICI</th><th>PAROLA</th><th>GÖRÜR</th></tr>
-      <tr><td><span class="tag">YÖNETİCİ</span></td><td><code>admin</code></td><td><code>admin123</code></td><td>Mağaza + Yönetim</td></tr>
-      <tr><td><span class="tag">KULLANICI</span></td><td><code>user</code></td><td><code>user123</code></td><td>Yalnızca mağaza</td></tr>
-      <tr><td colspan="4" class="muted">WordPress kipinde bunlar yerine sitenin kendi kullanıcıları geçerli olur; yönetici yetkisi WordPress rolünden gelir.</td></tr>
-    </table>
+    <h2>KURULUM</h2>
+    <ul>
+      <li><strong>1.</strong> <em>WORDPRESS EKLENTİSİ</em> zip'ini indir →
+          <code>$site/wp-admin</code> → Eklentiler → Yeni ekle → Yükle → Etkinleştir.</li>
+      <li><strong>2.</strong> <em>APK</em>'yı indir, telefonda "bilinmeyen kaynaklara izin ver" ile kur.</li>
+      <li><strong>3.</strong> Uygulamayı aç ve <strong>sitedeki kendi hesabınla</strong> giriş yap.
+          Yetki WordPress rolünden okunur; yönetici sekmesi yalnızca yöneticide oluşur.</li>
+    </ul>
     <p class="muted" style="margin-top:12px">
-      Yönetim sekmesi kullanıcı rolünde arayüzde hiç oluşturulmaz. Yetki kararını veri kaynağı
-      verir: yerel kipte Kotlin, WordPress kipinde sunucudaki yetenek denetimi. Kullanıcı rolünde
-      taslak kayıtlar ve yönetim uçları veri döndürmez.
+      Demo hesap yoktur: kullanıcı veritabanı sitenin WordPress kullanıcı tablosudur. Sunucu adresi
+      APK içinde gömülüdür, uygulamada ayarlanmaz. Sitede yayımlanmış <strong>tüm eski oyunlar</strong>
+      uygulamada kendiliğinden görünür — eklenti temanın <code>game</code> kayıt tipini okur, kendi
+      şeması yoktur, bu yüzden veri taşımak gerekmez.
     </p>
   </div>
 
   <div class="frame">
-    <h2>KURULUM</h2>
-    <ul>
-      <li>APK'yı indir, telefonda "bilinmeyen kaynaklara izin ver" ile kur.</li>
-      <li>Debug imzalıdır; Play Store dağıtımı için release imzası gerekir.</li>
-      <li>Kurulumdan sonra <strong>yerel kip</strong> çalışır: katalog cihazda, demo hesaplar geçerli, internet gerekmez.</li>
-      <li>WordPress'i veritabanı yapmak için eklenti zip'ini kur, sonra uygulamada
-          <em>Profil → Bağlantı ayarları</em>'na site adresini gir.</li>
-    </ul>
+    <h2>ORTAK VERİ</h2>
+    <table>
+      <tr><th>ÖZELLİK</th><th>SİTEDEKİ KARŞILIĞI</th></tr>
+      <tr><td>İstek listesi</td><td><code>sl_favorites</code></td></tr>
+      <tr><td>Puanlama</td><td><code>sl_user_rating_*</code></td></tr>
+      <tr><td>Yorum / inceleme</td><td><code>comment_type = review</code></td></tr>
+      <tr><td>İndirme sayacı</td><td><code>game_download_count</code></td></tr>
+      <tr><td>Profil fotoğrafı</td><td><code>sl_custom_avatar</code></td></tr>
+      <tr><td>Hata bildirimi</td><td><code>sl_report</code> kayıt tipi</td></tr>
+      <tr><td colspan="2" class="muted">Uygulamada yapılan her işlem sitede, sitede yapılan her işlem uygulamada görünür.</td></tr>
+    </table>
   </div>
 
   <p class="muted" style="text-align:center">min SDK 24 · target SDK 35 · Jetpack Compose · WebView yok</p>
@@ -202,7 +221,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         # Çıktı dosyaları kök altından sunulur; diğer her şey dosya sisteminden.
         stripped = self.path.lstrip("/").split("?", 1)[0]
-        if stripped in (APK_NAME, SOURCE_NAME, PLUGIN_NAME, LOG_NAME):
+        if stripped in (APK_NAME, SOURCE_NAME, PLUGIN_NAME, THEME_NAME, LOG_NAME, PLUGIN_LOG_NAME):
             self.path = "/artifacts/" + stripped
         super().do_GET()
 
@@ -210,27 +229,46 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         apk = artifact_path(APK_NAME)
         source = artifact_path(SOURCE_NAME)
         plugin = artifact_path(PLUGIN_NAME)
+        theme = artifact_path(THEME_NAME)
         log = artifact_path(LOG_NAME)
+        plugin_log = artifact_path(PLUGIN_LOG_NAME)
         failed = os.path.exists(artifact_path("BUILD_FAILED")) or not os.path.exists(apk)
+        plugin_failed = os.path.exists(artifact_path("PLUGIN_TEST_FAILED"))
+
+        if not os.path.exists(plugin_log):
+            plugin_status_class, plugin_status_text = "fail", "EKLENTİ TESTİ ÇALIŞMADI"
+        elif plugin_failed:
+            plugin_status_class, plugin_status_text = "fail", "EKLENTİ TESTİ BAŞARISIZ — GÜNLÜĞE BAK"
+        else:
+            plugin_status_class, plugin_status_text = "ok", "EKLENTİ TESTİ GEÇTİ"
 
         body = PAGE.substitute(
+            site=SITE,
             status_class="fail" if failed else "ok",
             status_text=(
                 "DERLEME BAŞARISIZ — BUILD GÜNLÜĞÜNE BAK"
                 if failed else "DERLEME BAŞARILI — APK HAZIR"
             ),
+            plugin_status_class=plugin_status_class,
+            plugin_status_text=plugin_status_text,
             apk_name=APK_NAME,
             source_name=SOURCE_NAME,
             log_name=LOG_NAME,
             plugin_name=PLUGIN_NAME,
+            theme_name=THEME_NAME,
+            plugin_log_name=PLUGIN_LOG_NAME,
             apk_size=human_size(apk) or "yok",
             source_size=human_size(source) or "yok",
             plugin_size=human_size(plugin) or "yok",
+            theme_size=human_size(theme) or "yok",
             log_size=human_size(log) or "yok",
+            plugin_log_size=human_size(plugin_log) or "yok",
             apk_disabled="" if os.path.exists(apk) else 'aria-disabled="true"',
             source_disabled="" if os.path.exists(source) else 'aria-disabled="true"',
             plugin_disabled="" if os.path.exists(plugin) else 'aria-disabled="true"',
+            theme_disabled="" if os.path.exists(theme) else 'aria-disabled="true"',
             log_disabled="" if os.path.exists(log) else 'aria-disabled="true"',
+            plugin_log_disabled="" if os.path.exists(plugin_log) else 'aria-disabled="true"',
         ).encode("utf-8")
 
         self.send_response(200)

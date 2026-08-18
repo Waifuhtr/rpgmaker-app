@@ -22,6 +22,10 @@ keystore.properties
 !/release/*.apk
 !/release/*.zip
 
+# Python (space/server.py yerelde denenirse)
+__pycache__/
+*.pyc
+
 # Sistem
 .DS_Store
 Thumbs.db

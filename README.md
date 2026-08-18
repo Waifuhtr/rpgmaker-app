@@ -1,179 +1,196 @@
-# PixelStore
+# PixelStore — riaslink.fun oyun kütüphanesi
 
-RPG Maker estetiğinde, piksel sanatıyla çizilmiş bir **uygulama mağazası**. Play Store'un
-işlevlerini (başlık, ikon, açıklama, ekran görüntüleri, türler, puan, indirme) 8-bit bir vitrinde
-toplar ve rol tabanlı bir **yönetim paneli** içerir.
+RPG Maker / 8-bit piksel tarzında bir Android uygulaması. Veritabanı **riaslink.fun** sitesidir:
+sitede yayımlanan her oyun, her üye, her yorum, her puan ve her istek listesi doğrudan uygulamada
+görünür — ve tersi de geçerlidir.
 
-**Tamamen yerel Android uygulaması** — WebView yok, HTML/CSS/JS yok. Arayüzün her pikseli
-Jetpack Compose ile çizilir. Veritabanı olarak cihazı veya **WordPress**'i kullanabilir.
+Arayüzün tamamı **Jetpack Compose** ile yerel olarak çizilir. Projede WebView yoktur.
 
-## Ne yapar
+```
+┌──────────────────────────┐        ┌──────────────────────────────────┐
+│  PixelStore (Android)    │        │  riaslink.fun (WordPress)         │
+│  Kotlin + Compose        │◄──────►│  SteamLike teması                 │
+│  BuildConfig.API_BASE    │  HTTPS │  + PixelStore Bridge eklentisi    │
+│  (adres kodda gömülü)    │  JSON  │  game CPT · game_* taksonomileri  │
+└──────────────────────────┘        └──────────────────────────────────┘
+```
 
-| Ekran | İçerik |
+## Neden veri taşımak gerekmiyor
+
+Eklenti **kendi kayıt tipini tanımlamaz.** Temanın var olan `game` kayıt tipini, `game_*`
+taksonomilerini ve `sl_*` post meta alanlarını okur/yazar. Bu yüzden eklenti etkinleştirildiği
+anda sitede **daha önce yayımlanmış tüm oyunlar** uygulamada görünür. Tek tek yeniden yükleme,
+içe aktarma veya eşitleme adımı yoktur.
+
+Aynı nedenle uygulama iki yönlü çalışır:
+
+| Uygulamadaki özellik | Sitedeki karşılığı |
 |---|---|
-| Giriş | Demo hesap kartları, manuel form, sunucu/bağlantı paneli |
-| Mağaza | Haftanın oyunu afişi, arama, tür çipleri, 4 sıralama kipi, uygulama kartları |
-| Türler | Piksel simgeli tür kutuları, kayıt sayısı ve dağılım çubuğu |
-| Kayıt detayı | İkon, puan/indirme/boyut şeridi, indirme akışı, ekran görüntüsü galerisi + tam ekran görüntüleyici, açıklama, etiketler, bilgi tablosu |
-| Profil | Kütüphane, ses/titreşim ayarları, bağlantı bilgisi, çıkış |
-| **Yönetim** | İstatistik kartları, tür dağılımı, katalog CRUD, canlı önizlemeli kayıt düzenleyici, ekran görüntüsü editörü, kullanıcı listesi, katalog sıfırlama |
-| Bağlantı | WordPress adresi, bağlantı sınaması, kurulum adımları |
+| İstek listesi | `sl_favorites` kullanıcı meta |
+| Puanlama (1–5) | `sl_user_rating_sum` / `_count` / `_avg` |
+| Yorum / inceleme | `wp_comments`, `comment_type = review` |
+| Yorum oyları | `sl_upvotes` / `sl_downvotes` |
+| İndirme sayacı | `game_download_count` |
+| Görüntülenme | `game_view_count` |
+| Profil fotoğrafı | `sl_custom_avatar` |
+| Rozetler | temanın `sl_get_user_badges()` işlevi |
+| Hata bildirimi | `sl_report` kayıt tipi |
+| Yönetici düzenlemesi | `game` kaydının kendisi + medya kütüphanesi |
 
-## İki veri kaynağı
+Puanlamada tek fark: tema oyu çerezle sayar, uygulamada çerez yoktur. Eklenti bu yüzden kişi
+başına oyu `psb_rating_voters` içinde tutar — kullanıcı oyunu değiştirdiğinde toplam düzeltilir,
+oy sayısı şişmez. Temanın gördüğü ortalama alanları aynı kalır.
 
-Uygulama tek başına da çalışır, WordPress'e de bağlanır. Aktif kip üst çubukta rozet olarak yazar.
+## Kurulum
 
-| | **Yerel kip** (varsayılan) | **WordPress kipi** |
+**1. Eklenti** — `release/pixelstore-wordpress-plugin.zip`
+
+```
+riaslink.fun/wp-admin → Eklentiler → Yeni ekle → Eklenti yükle → Zip'i seç → Etkinleştir
+```
+
+Etkinleştirdikten sonra `Ayarlar → PixelStore` sayfası temanın bulunup bulunmadığını, kaç oyun
+ve kaç kullanıcı göründüğünü yazar.
+
+**2. Uygulama** — `release/PixelStore-debug.apk`
+
+Telefonda "bilinmeyen kaynaklardan kuruluma izin ver" gerekir (debug imzalı).
+
+**3. Giriş**
+
+Sitedeki kendi kullanıcı adı/e-posta ve parolanla giriş yap. Demo hesap yoktur.
+
+## Yetki
+
+Yönetici kararını **sunucu** verir: `manage_options` veya `edit_others_posts` yeteneği olan
+WordPress kullanıcısı yöneticidir.
+
+- Yönetim sekmesi kullanıcı rolünde arayüzde **hiç oluşturulmaz** (koşullu render, gizleme değil).
+- Yönetim uçları `permission_admin` ile korunur: kullanıcı rolündeki bir jetonla çağrılırsa
+  403 döner.
+- Taslak (`draft`) kayıtlar kullanıcı rolündeki listelere hiç girmez.
+
+Yani arayüzü atlayıp doğrudan uca istek atmak da işe yaramaz.
+
+## Oturum
+
+Parola cihazda **saklanmaz.** Giriş başarılı olduğunda sunucu `"<kullanıcı_id>.<48 hex>"`
+biçiminde bir jeton üretir; sunucuda yalnızca `sha256` özeti tutulur. Jeton 30 gün geçerlidir ve
+kullanıcı başına en çok 5 cihaz saklanır (en eskisi düşer). Uygulama açılışta jetonu doğrular,
+geçersizse siler ve giriş ekranına döner.
+
+## Uygulama ekranları
+
+| Sekme | İçerik |
+|---|---|
+| **Mağaza** | Canlı arama, öne çıkan oyun, katlanabilir filtreler (tür/platform/dil/durum), sıralama (en yeni · indirme · puan · A-Z), sonsuz kaydırma |
+| **Türler** | Dört taksonominin karoları; birine dokununca mağaza o filtreyle açılır |
+| **Listem** | İstek listesi (site ile ortak) |
+| **Profil** | Profil fotoğrafı yükleme/kaldırma, rozetler, ses/titreşim ayarı, çıkış |
+| **Yönetim** | Yalnızca yönetici: site özeti, tür dağılımı, katalog yönetimi, kullanıcı listesi, oyun düzenleyici |
+
+Oyun sayfasında: kahraman görseli, ölçü şeridi (puan · indirme · boyut), indirme (3 saniyelik
+geri sayım + arşiv parolası), alternatif link, 1–5 puanlama, ekran görüntüsü galerisi, açıklama /
+değişiklik günlüğü / kurulum rehberi, sistem gereksinimleri (minimum + önerilen), etiketler,
+yorumlar, fragman ve hata bildirimi.
+
+Yönetici oyun düzenleyicisinde kapak ve ekran görüntüsü yükleme, tüm künye alanları, taksonomi
+seçimi (yeni terim ekleme dahil), metinler, indirme linkleri ve sistem gereksinimleri vardır.
+Kaydedilen her alan doğrudan siteye yazılır.
+
+## Görseller
+
+Kapak ve ekran görüntüleri WordPress medya kütüphanesinden gelir (Coil ile indirilir, bellek ve
+disk önbelleği açık). Bir kayıtta görsel yoksa tohumdan üretilen piksel sahne yer tutucu olarak
+çizilir — boş gri kutu görünmez. Yer tutucu deterministiktir: aynı oyun her yerde aynı görünür.
+
+Arayüz çerçeveleri, glifler ve rozetler tamamen kod tarafından çizilir (yuvarlak köşe yoktur,
+pah kırılmış piksel kenar kullanılır). Ses efektleri cihazda `AudioTrack` ile üretilen kare/üçgen
+dalgalardır; ses dosyası yoktur.
+
+## REST uçları
+
+Taban: `https://riaslink.fun/wp-json/pixelstore/v2`
+
+| Uç | Yöntem | Yetki |
 |---|---|---|
-| Katalog | cihazın özel dizininde `catalog.json` | `pixelstore_app` özel yazı tipi |
-| Hesaplar | gömülü `admin` / `user` | sitenin WordPress kullanıcıları |
-| Yönetici kararı | Kotlin hesap tablosu | WordPress yetenekleri (`manage_options` / `edit_others_posts`) |
-| İnternet | gerekmez | gerekir |
-| Geçiş | Profil → Bağlantı ayarları'nda adresi boş bırak | adresi gir, kaydet |
+| `/health` | GET | açık |
+| `/auth/login` · `/auth/logout` | POST | açık |
+| `/auth/me` | GET | oturum |
+| `/auth/avatar` | POST · DELETE | oturum |
+| `/games` | GET | oturum |
+| `/games` | POST | yönetici |
+| `/games/{id}` | GET | oturum |
+| `/games/{id}` | PUT · PATCH · DELETE | yönetici |
+| `/games/{id}/published` | POST | yönetici |
+| `/games/{id}/download` · `/view` · `/favorite` · `/rate` · `/report` | POST | oturum |
+| `/games/{id}/reviews` | GET · POST | oturum |
+| `/games/{id}/cover` · `/screenshots` | POST | yönetici |
+| `/games/{id}/screenshots/{attachment}` | DELETE | yönetici |
+| `/reviews/{review}` | DELETE | oturum (kendi yorumu) |
+| `/reviews/{review}/vote` | POST | oturum |
+| `/search` · `/taxonomies` · `/favorites` | GET | oturum |
+| `/stats` · `/users` | GET | yönetici |
 
-## Demo hesaplar (yerel kip)
+Jeton `Authorization: Bearer <jeton>` veya `X-PixelStore-Token` başlığıyla gönderilir.
 
-| Rol | Kullanıcı | Parola | Gördüğü |
-|---|---|---|---|
-| Yönetici | `admin` | `admin123` | Mağaza + Yönetim sekmesi + taslak kayıtlar |
-| Kullanıcı | `user` | `user123` | Yalnızca mağaza |
+## Yükleme sınırları
 
-## Yetki ayrımı nasıl çalışır
+Görsel yüklemede en çok 8 MB; yalnızca JPEG, PNG, WebP ve GIF kabul edilir ve dosya adına değil
+**içeriğe** bakılarak doğrulanır (`wp_check_filetype_and_ext`). Uygulama yüklemeden önce görseli
+küçültür: profil fotoğrafı en uzun kenar 512 px, kapak 1600 px, JPEG kalite 88. Bir oyunda en çok
+24 ekran görüntüsü tutulur. Yazma uçları yalnızca `http`/`https` adresleri kabul eder.
 
-Rol kararı **veri kaynağında** verilir, arayüzde değil:
-
-- **Veri katmanı** — kullanıcı rolünde katalog yükü taslak kayıtları ve `published`/`createdAt`
-  alanlarını hiç içermez.
-- **Kaynak katmanı** — `saveApp`, `deleteApp`, `setPublished`, `users`, `stats`, `resetCatalog`
-  çağrıları yönetici değilse veri değil hata döner. Yerel kipte bunu `LocalCatalogSource`,
-  WordPress kipinde sunucudaki yetenek denetimi yapar.
-- **Arayüz katmanı** — Yönetim sekmesi kullanıcı rolünde hiç oluşturulmaz; `push()`/`openTab()`
-  de `adminOnly` ekranları reddeder.
-
-## Mimari
+## Depo yapısı
 
 ```
-app/src/main/
-├── java/com/waifuhtr/pixelstore/
-│   ├── MainActivity.kt              Compose host, geri tuşu, ses/titreşim sağlayıcı
-│   ├── StoreViewModel.kt            UI durumu, gezinme yığını, tüm eylemler
-│   ├── data/
-│   │   ├── Models.kt                Veri modelleri + JSON dönüşümleri (tek ayrıştırıcı)
-│   │   ├── CatalogSource.kt         Kaynak arayüzü
-│   │   ├── LocalCatalogSource.kt    Cihaz içi katalog, atomik yazma, hesap tablosu
-│   │   ├── WordPressCatalogSource.kt REST istemcisi
-│   │   ├── HttpJson.kt              HttpURLConnection tabanlı küçük JSON istemcisi
-│   │   └── Settings.kt              Tercihler, jeton, kurulu kayıtlar
-│   └── ui/
-│       ├── theme/Theme.kt           Renkler, iki yazı tipli tipografi, piksel çerçeve modifier'ları
-│       ├── art/PixelArt.kt          Tohumdan üretilen ikon/sahne/glif çizimi + LRU önbellek
-│       ├── components/Components.kt Düğme, alan, rozet, segment çubuk, panel, anahtar…
-│       ├── Feedback.kt              8-bit sesler (AudioTrack ile üretilir) + titreşim
-│       └── screens/                 Her ekran tek dosya
-├── res/font/press_start_2p.ttf      Piksel yazı tipi (OFL-1.1)
-└── assets/catalog_seed.json         Tohum katalog
-
-wordpress-plugin/pixelstore-api/     WordPress eklentisi (veritabanı + REST)
-space/                               Hugging Face Space (APK derler, çıktıları sunar)
+app/                              Android uygulaması (Kotlin + Compose)
+  src/main/java/.../data/         RiasApi, Models, HttpJson, Settings, ImagePicker
+  src/main/java/.../ui/           tema, bileşenler, ekranlar, piksel çizim motoru
+  src/test/java/.../              tasarım ekran görüntüsü testi (Robolectric)
+wordpress-plugin/
+  pixelstore-bridge/              WordPress eklentisi
+  tests/                          WordPress kurulumu gerektirmeyen test takımı
+wordpress-theme/steamlike/        temanın değiştirilmemiş kopyası (karşılaştırma için)
+space/                            Hugging Face Space (Dockerfile + açılış sayfası)
+release/                          derlenmiş APK ve zip'ler
+docs/SENARYO.md                   ürün senaryosu
 ```
-
-### Görseller nereden geliyor
-
-Depoda **tek bir oyun görseli yok**. Her ikon ve ekran görüntüsü `iconSeed`/`seed` değerinden
-deterministik olarak bir `Bitmap`'e piksel piksel yazılır, sonra `FilterQuality.None` ile
-büyütülerek çizilir. Üretilenler LRU önbellekte tutulur, liste kaydırmada yeniden hesaplanmaz.
-Altı sahne tipi vardır: açılış, ova, savaş, kasaba, mağara, menü.
-
-Sesler de dosya değil: kare/üçgen dalga PCM tamponları çalışma zamanında üretilip `AudioTrack`
-ile çalınır.
-
-### Okunabilirlik kararları
-
-v1'in arayüzü "boğuk" bulunmuştu. v2'de:
-
-- **İki yazı tipi**: Press Start 2P yalnızca kısa metinlerde (başlık, etiket, düğme, sayı);
-  paragraflar sistem yazı tipinde, geniş satır aralığıyla. Piksel yazı tipinde uzun metin okunmuyor.
-- **Üç yüzey kademesi** (zemin / yüzey / yükseltilmiş yüzey) ve yükseltilmiş metin kontrastı.
-- **Tarama çizgisi katmanı kaldırıldı** — murk'un ana kaynağıydı.
-- Bölüm başlıkları glif + başlık + çizgi; kartlarda dört bilgi kademesi (başlık, geliştirici,
-  açıklama, ölçüler) ayrı boyut ve renkte.
 
 ## Derleme
 
-### Yerelde
-
 ```bash
-export ANDROID_HOME=/path/to/android-sdk   # platforms;android-35, build-tools;35.0.0
-./gradlew assembleDebug
-# çıktı: app/build/outputs/apk/debug/app-debug.apk
+export ANDROID_HOME=/path/to/android-sdk   # veya local.properties içinde sdk.dir
+./gradlew assembleDebug                    # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Sürüm matrisi: Gradle 8.14.3 · AGP 8.11.1 · Kotlin 2.1.21 · Compose BOM 2025.06.00 · JDK 17 hedefi
-· compileSdk 35 · minSdk 24.
+Sunucu adresi `app/build.gradle.kts` içinde gömülüdür:
 
-Derlenmiş APK her sürümde `release/PixelStore-debug.apk` altında depoya konur.
+```kotlin
+buildConfigField("String", "API_BASE", "\"https://riaslink.fun/wp-json/pixelstore/v2\"")
+buildConfigField("String", "SITE_URL", "\"https://riaslink.fun\"")
+```
 
-### Tasarımı görmek (emülatörsüz)
-
-Ekranlar Robolectric'in yerel grafik kipinde JVM üzerinde çizilip PNG'ye alınabilir:
+### Testler
 
 ```bash
+# Eklenti: 130 doğrulama, WordPress kurulumu gerekmez (sahte WordPress ile çalışır)
+php wordpress-plugin/tests/bridge-test.php
+
+# Arayüz: her ekranı PNG olarak çizer, emülatör gerektirmez
 ./gradlew :app:testDebugUnitTest --tests '*DesignScreenshotTest'
 # çıktı: app/build/screenshots/*.png
 ```
 
-### Hugging Face Space üzerinde
+### Hugging Face Space paketi
 
 ```bash
-scripts/make-space-zip.sh
-# dist/pixelstore-hf-space.zip          -> Space deposuna
-# dist/pixelstore-wordpress-plugin.zip  -> wp-admin'e
+scripts/make-space-zip.sh          # dist/ altına üç zip üretir
 ```
 
-Zip'in içindeki `pixelstore-space/` klasörünün **içeriğini** Space deposunun köküne koyup push
-edin. Space (Docker SDK, port 7860) imaj derlenirken Android SDK indirir, `assembleDebug`
-çalıştırır ve açılış sayfasında APK, kaynak zip'i, WordPress eklentisi zip'i ile build günlüğünü
-sunar. Derleme başarısız olsa bile Space ayağa kalkar.
+Space imajı kurulurken APK derlenir, eklenti test takımı çalıştırılır ve hepsi Space'in açılış
+sayfasından indirilebilir olur.
 
-## WordPress'i veritabanı yapmak
+## Sürüm
 
-1. `wordpress-plugin/pixelstore-api` klasörünü zip'leyip WordPress'e kur ve etkinleştir
-   (ya da `dist/pixelstore-wordpress-plugin.zip` dosyasını kullan).
-2. wp-admin → **PixelStore** → "Demo kataloğu kur".
-3. Aynı ekranda yazan site adresini uygulamada **Profil → Bağlantı ayarları**'na gir,
-   "Bağlantıyı sına" ile doğrula, kaydet.
-4. WordPress kullanıcı adın ve parolanla giriş yap.
-
-Eklenti ayrıntıları: [`wordpress-plugin/pixelstore-api/readme.txt`](wordpress-plugin/pixelstore-api/readme.txt)
-
-Uçlar `/wp-json/pixelstore/v1/` altındadır: `health`, `auth/login`, `auth/me`, `auth/logout`,
-`catalog`, `apps/{id}`, `apps/{id}/install`, `apps/{id}/published`, `users`, `stats`, `seed`.
-
-## Güvenlik notları
-
-- **Parolalar**: yerel kipte kaynak kodda düz metin değil, sabit tuzlu SHA-256 özeti; karşılaştırma
-  sabit zamanlı. WordPress kipinde parola doğrulaması `wp_authenticate()` ile sitenin kendi
-  kullanıcı tablosuna karşı yapılır, eklenti parola saklamaz.
-- **Jetonlar**: WordPress kipinde rastgele jeton üretilir; sunucuda yalnızca SHA-256 özeti kullanıcı
-  metasında durur, 30 gün sonra düşer, kullanıcı başına en fazla 5 cihaz. Çıkış yalnızca o cihazın
-  jetonunu iptal eder.
-- **Rol yükseltme**: oturum sürdürülürken rol kalıcı tercihlerden değil hesap tablosundan /
-  sunucudan okunur; tercihler kurcalansa bile yetki yükseltilemez.
-- **Sunucu tarafı doğrulama**: uygulamadan gelen JSON şemaya göre budanır (metin uzunlukları,
-  sayı aralıkları, yalnızca `http(s)` bağlantılar, en fazla 8 ekran görüntüsü). İndirme sayacı
-  istemciden yazılamaz, yalnızca `/install` ucu artırır.
-- **Yerel yazma**: katalog yazımı atomiktir (`.tmp` + rename); yarım dosya kataloğu bozamaz.
-- **İmzalama**: `keystore.properties` depoda yoktur. Varsa release otomatik imzalanır, yoksa
-  imzasız çıkar. R8 açıktır.
-
-## Test
-
-```bash
-./gradlew :app:testDebugUnitTest      # Compose ekran render testi (PNG üretir)
-php wordpress-plugin/tests/auth-smoke.php   # jeton üretimi/doğrulama/iptali (WordPress gerekmez)
-```
-
-## Lisans
-
-Kod MIT. Press Start 2P yazı tipi SIL Open Font License 1.1 ile gelir
-(`app/src/main/assets/OFL-PressStart2P.txt`).
+`3.0.0` (versionCode 3) · minSdk 24 · targetSdk 35 · Kotlin 2.1.21 · AGP 8.11.1

@@ -24,9 +24,14 @@ android {
         applicationId = "com.waifuhtr.pixelstore"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 3
+        versionName = "3.0.0"
         vectorDrawables.useSupportLibrary = true
+
+        // Sunucu adresi derleme sırasında gömülür: uygulamada demo/yerel kip ve düzenlenebilir
+        // sunucu ayarı yoktur, tek veri kaynağı sitedir.
+        buildConfigField("String", "API_BASE", "\"https://riaslink.fun/wp-json/pixelstore/v2\"")
+        buildConfigField("String", "SITE_URL", "\"https://riaslink.fun\"")
     }
 
     buildFeatures {
@@ -97,6 +102,9 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
+
+    // Gerçek kapak ve ekran görüntüleri siteden geliyor; Coil önbellekli yükleme sağlar.
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

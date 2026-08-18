@@ -1,44 +1,53 @@
-# Teslim dosyaları
+# Hazır dosyalar
 
-| Dosya | Ne işe yarar |
-|---|---|
-| `PixelStore-debug.apk` | Derlenmiş APK (debug imzalı). Telefona doğrudan kurulabilir. |
-| `pixelstore-wordpress-plugin.zip` | WordPress eklentisi. wp-admin → Eklentiler → Yeni ekle → Eklenti yükle. |
-| `pixelstore-hf-space.zip` | Hugging Face Space paketi. Aç, `pixelstore-space/` klasörünün **içeriğini** Space deposunun köküne koy. |
+Depodan doğrudan indirilebilir. Her sürümde yenilenir.
 
-Üçü de `scripts/make-space-zip.sh` ve `./gradlew assembleDebug` ile yeniden üretilebilir;
-depoda tutulmalarının tek nedeni doğrudan indirilebilir olmaları.
+| Dosya | Boyut | Ne işe yarar |
+|---|---|---|
+| `PixelStore-debug.apk` | 11M | Telefona kurulacak uygulama |
+| `pixelstore-wordpress-plugin.zip` | 28K | riaslink.fun'a kurulacak eklenti |
+| `steamlike-theme.zip` | 212K | Temanın değiştirilmemiş kopyası (yeniden kurmak gerekirse) |
+| `pixelstore-hf-space.zip` | 464K | Hugging Face Space paketi (kendin derlemek istersen) |
 
-## APK kurulumu
+## Kurulum sırası
 
-1. `PixelStore-debug.apk` dosyasını telefona indir
-2. "Bilinmeyen kaynaklardan kuruluma izin ver" onayını ver
-3. Kur ve aç
+**1. Eklenti**
 
-Kurulumdan sonra uygulama **yerel kipte** çalışır: katalog cihazda saklanır, internet gerekmez.
+```
+riaslink.fun/wp-admin → Eklentiler → Yeni ekle → Eklenti yükle
+→ pixelstore-wordpress-plugin.zip → Şimdi kur → Etkinleştir
+```
 
-Demo hesaplar: `admin` / `admin123` (yönetici) · `user` / `user123` (kullanıcı)
+Etkinleştirdikten sonra `Ayarlar → PixelStore` sayfası temanın bulunduğunu, kaç oyun ve kaç
+kullanıcı göründüğünü yazar. Burada oyun sayısı doğru görünüyorsa uygulama da aynı listeyi
+görecek demektir.
 
-Debug imzalıdır — Play Store dağıtımı için release imzası gerekir (bkz. ana `README.md`).
+**2. Uygulama**
 
-## WordPress'i veritabanı yapmak
+`PixelStore-debug.apk` dosyasını telefona indir ve kur. Android "bilinmeyen kaynaklardan
+kuruluma izin ver" onayını isteyecek (dosya debug imzalı olduğu için).
 
-1. `pixelstore-wordpress-plugin.zip` dosyasını wp-admin'den kur ve etkinleştir
-2. wp-admin → **PixelStore** → "Demo kataloğu kur"
-3. Aynı ekranda yazan site adresini uygulamada **Profil → Bağlantı ayarları**'na gir
-4. "Bağlantıyı sına" ile doğrula, "Kaydet"e bas
-5. WordPress kullanıcı adın ve parolanla giriş yap
+**3. Giriş**
 
-Yönetim paneli, WordPress'te `manage_options` veya `edit_others_posts` yeteneği olan
-kullanıcılara açılır (yönetici ve editör).
+Sitedeki kendi kullanıcı adın (veya e-postan) ve parolanla giriş yap. **Demo hesap yoktur** —
+kullanıcı veritabanı sitenin WordPress kullanıcı tablosudur.
 
-## Space kurulumu
+Yönetici sekmesi yalnızca WordPress rolü yönetici olan hesapta oluşur. Kullanıcı rolünde
+arayüzde hiç yer almaz ve sunucudaki yönetim uçları da veri döndürmez.
 
-1. huggingface.co/new-space → **SDK: Docker** → Blank
-2. `pixelstore-hf-space.zip` içindeki `pixelstore-space/` klasörünün içeriğini (Dockerfile,
-   README.md, server.py, .dockerignore, project/) Space deposunun köküne kopyala
-3. Push et
+## Sitede yayımlanmış eski oyunlar
 
-Space imajı derlenirken Android SDK iner ve `./gradlew assembleDebug` çalışır. İlk derleme
-tipik olarak 10–20 dakika sürer. Açılış sayfası APK'yı, kaynak zip'ini, WordPress eklentisi
-zip'ini ve build günlüğünü sunar.
+Hepsi kendiliğinden görünür. Eklenti kendi kayıt tipini tanımlamaz; temanın var olan `game`
+kayıt tipini ve `game_*` taksonomilerini okur. Tek tek yeniden yükleme, içe aktarma veya
+eşitleme adımı yoktur.
+
+## Notlar
+
+- Sunucu adresi APK içinde gömülüdür (`https://riaslink.fun/wp-json/pixelstore/v2`); uygulamada
+  sunucu ayarı yoktur.
+- Parola cihazda saklanmaz. Girişte alınan jeton 30 gün geçerlidir, sunucuda yalnızca SHA-256
+  özeti tutulur, kullanıcı başına en çok 5 cihaz kaydedilir.
+- APK debug imzalıdır: kurulabilir ama Play Store'a yüklenemez. Play Store dağıtımı için
+  `keystore.properties` ile release imzası gerekir (imza dosyaları depoya girmez).
+- Tema üzerinde **değişiklik yapılmadı**; `steamlike-theme.zip` yalnızca yedek kopyadır,
+  kurman gerekmiyor.

@@ -23,8 +23,10 @@ ARG ANDROID_CMDLINE_TOOLS=https://dl.google.com/android/repository/commandlineto
 ARG ANDROID_PLATFORM=android-35
 ARG ANDROID_BUILD_TOOLS=35.0.0
 
+# php-cli yalnızca WordPress eklentisinin test koşucusu için gerekir (sahte WordPress ile çalışır,
+# gerçek bir kurulum istemez). Runtime imajına taşınmaz.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl unzip zip ca-certificates git \
+ && apt-get install -y --no-install-recommends curl unzip zip ca-certificates git php-cli \
  && rm -rf /var/lib/apt/lists/*
 
 # Android command-line tools + gerekli SDK paketleri
@@ -54,8 +56,20 @@ RUN mkdir -p /out \
  && zip -q -r /out/pixelstore-source.zip . -x '.git/*' -x '.gradle/*' -x 'local.properties'
 
 # WordPress eklentisi: doğrudan wp-admin'e yüklenebilecek zip.
-RUN if [ -d wordpress-plugin/pixelstore-api ]; then \
-      (cd wordpress-plugin && zip -q -r /out/pixelstore-wordpress-plugin.zip pixelstore-api); \
+RUN if [ -d wordpress-plugin/pixelstore-bridge ]; then \
+      (cd wordpress-plugin && zip -q -r /out/pixelstore-wordpress-plugin.zip pixelstore-bridge); \
+    fi
+
+# Eklenti testleri WordPress kurulumu gerektirmez (tests/wp-stubs.php sahte WordPress sağlar).
+# Sunucu tarafı sözleşme bozulduysa APK'yı derlemeden önce burada görünür.
+RUN if [ -f wordpress-plugin/tests/bridge-test.php ]; then \
+      (php wordpress-plugin/tests/bridge-test.php 2>&1 | tee /out/plugin-test-log.txt) \
+        || touch /out/PLUGIN_TEST_FAILED; \
+    fi
+
+# Tema depoda değiştirilmedi; yeniden kurulum gerekirse indirilebilsin diye paketlenir.
+RUN if [ -d wordpress-theme/steamlike ]; then \
+      (cd wordpress-theme && zip -q -r /out/steamlike-theme.zip steamlike); \
     fi
 
 RUN chmod +x ./gradlew \

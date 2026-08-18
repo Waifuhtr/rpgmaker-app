@@ -1,0 +1,32 @@
+/*
+Theme Name: SteamLike
+Theme URI: https://ornek.com/steamlike
+Author: Gemini
+Author URI: https://ornek.com
+Description: Profesyonel, oyun, yazılım ve dijital içerik odaklı Steam benzeri WordPress teması. "Late-Night LAN Party" tasarım dili ile derin uzay/indigo zemin, elektrik camgöbeği + menekşe aksan sistemi ve HUD köşe-braketi imza motifi kullanır.
+Version: 2.1.0
+Requires at least: 6.0
+Tested up to: 6.4
+Requires PHP: 7.4
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: steamlike
+Domain Path: /languages
+Tags: dark-theme, grid-layout, custom-colors, custom-menu, featured-images, translation-ready
+*/
+
+/*
+ * Not: Tasarım değişkenlerinin (renk, radius, gölge, vb.) TEK kaynağı
+ * assets/css/main.css dosyasıdır. Burada yalnızca WordPress'in zorunlu
+ * kıldığı tema başlığı ve enqueue sırasından bağımsız çalışması için
+ * gereken en asgari/güvenli temel kurallar bulunur; böylece iki dosya
+ * arasında çakışan :root tanımları oluşmaz.
+ */
+html {
+	background-color: #05080f;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+}
